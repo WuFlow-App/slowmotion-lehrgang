@@ -8,10 +8,10 @@
     { id: 'Level 2', stars: 2, group: 'Basis', logo: 'level2' },
     { id: 'Level 3', stars: 3, group: 'Fortgeschrittene', logo: 'level3' },
     { id: 'Praktiker', stars: 0, group: 'Fortgeschrittene', mark: 'P', logo: 'praktiker' },
-    { id: 'Kampfsystem', stars: 0, group: 'Fortgeschrittene', mark: 'KS', logo: 'kampfsystem' },
-    { id: 'Ausbilder 1', stars: 0, group: 'Ausbilder', mark: 'A1', logo: 'ausbilder1' },
-    { id: 'Ausbilder 2', stars: 0, group: 'Ausbilder', mark: 'A2', logo: 'ausbilder2' },
-    { id: 'Führungskräfte', stars: 0, group: 'Ausbilder', mark: 'F', logo: 'fuehrungskraefte' },
+    // „Kampfsystem“ ist keine eigene Stufe, sondern Überbegriff für Ausbilder 1, Ausbilder 2 und Führungskräfte (Korrektur 20.10.2026)
+    { id: 'Ausbilder 1', stars: 0, group: 'Kampfsystem', mark: 'A1', logo: 'ausbilder1' },
+    { id: 'Ausbilder 2', stars: 0, group: 'Kampfsystem', mark: 'A2', logo: 'ausbilder2' },
+    { id: 'Führungskräfte', stars: 0, group: 'Kampfsystem', mark: 'F', logo: 'fuehrungskraefte' },
     { id: 'Ehrenmitglied', stars: 0, group: 'Ausbilder', mark: 'E', logo: 'ehrenmitglied' }
   ];
   // Stand 20.10.2026: Berlin (Eberswalde), Leipzig / Dresden ergänzt; mehrere Schulen je Person möglich
@@ -158,6 +158,9 @@
       let ev = e.id && d.events.find(x => x.id === e.id);
       if (!ev) { ev = { id: uuid(), active: false }; d.events.push(ev); }
       Object.assign(ev, { title: e.title, event_date: e.event_date || null, time_text: e.time_text || '', location: e.location || '' });
+      if (e.album_upload_until) ev.album_upload_until = e.album_upload_until;
+      if (e.album_view_until) ev.album_view_until = e.album_view_until;
+      dDefaults(ev);
       if (e.active) d.events.forEach(x => { x.active = x.id === ev.id; });
       dsave(d); return dData(d, ev.id);
     },
@@ -190,10 +193,11 @@
   }
   function normCode(c) { return String(c || '').replace(/\s/g, '').toUpperCase(); }
   function dAccess(code) {
-    const d = dload(), ev = dAlbumEvent(d); let c = normCode(code); if (!c) throw new ApiError('bad_code');
+    const d = dload(); dAlbumEvent(d); let c = normCode(code); if (!c) throw new ApiError('bad_code');
     if (/^[A-Z0-9]{6}$/.test(c)) c = 'SM-' + c;
-    const person = d.people.find(p => p.event_id === ev.id && p.ticket.toUpperCase() === c);
-    if (!person && !(ev.album_code && normCode(ev.album_code) === normCode(code))) throw new ApiError('bad_code');
+    const person = d.people.find(p => p.ticket.toUpperCase() === c);
+    const ev = person ? d.events.find(e => e.id === person.event_id) : d.events.find(e => e.album_code && normCode(e.album_code) === normCode(code));
+    if (!ev) throw new ApiError('bad_code');
     if (!ev.album_view_until || todayBerlin() > ev.album_view_until) throw new ApiError('album_closed');
     return { ev, person };
   }
@@ -202,9 +206,9 @@
   const demoAlbum = {
     async albumList(code, client) {
       const { ev, person } = dAccess(code);
-      return { event: { id: ev.id, title: ev.title, event_date: ev.event_date, upload_until: ev.album_upload_until, view_until: ev.album_view_until, film_url: ev.album_film_url || null, can_upload: todayBerlin() <= (ev.album_upload_until || ev.album_view_until) },
+      return { event: { id: ev.id, title: ev.title, event_date: ev.event_date, upload_until: ev.album_upload_until, view_until: ev.album_view_until, film_url: ev.album_film_url || null, welcome: ev.album_welcome || '', can_upload: todayBerlin() <= (ev.album_upload_until || ev.album_view_until) },
         name: person ? person.first_name + ' ' + person.last_name.charAt(0) + '.' : null,
-        items: dmLoad().filter(m => m.event_id === ev.id && m.status === 'ok').sort((a, b) => b.created_at.localeCompare(a.created_at)).map(m => ({ id: m.id, path: m.path, thumb: m.thumb_path, kind: m.kind, uploader: m.uploader, mine: m.client === client, created_at: m.created_at, duration: m.duration })),
+        items: dmLoad().filter(m => m.event_id === ev.id && m.status === 'ok').sort((a, b) => b.created_at.localeCompare(a.created_at)).map(m => ({ id: m.id, path: m.path, thumb: m.thumb_path, kind: m.kind, uploader: m.uploader, mine: m.client === client, created_at: m.created_at, duration: m.duration, caption: m.caption || '' })),
         usage: dUsage(ev.id), limit: LIMIT };
     },
     async albumBegin(code, client, name, f) {
@@ -235,17 +239,19 @@
     async adminAlbum(key, evId) {
       dAdmin(key); const d = dload(); const ev = d.events.find(e => e.id === evId) || activeEvent(d); dDefaults(ev); dsave(d);
       const all = dmLoad();
-      return { settings: { code: ev.album_code || '', title: ev.title, event_date: ev.event_date, upload_until: ev.album_upload_until || null, view_until: ev.album_view_until || null, film_url: ev.album_film_url || '' },
-        items: all.filter(m => m.event_id === ev.id && (m.status === 'ok' || m.status === 'hidden')).sort((a, b) => (b.reported - a.reported) || b.created_at.localeCompare(a.created_at)).map(m => ({ id: m.id, path: m.path, thumb: m.thumb_path, kind: m.kind, uploader: m.uploader, status: m.status, reported: m.reported, created_at: m.created_at, size: m.size + m.thumb_size })),
+      return { settings: { code: ev.album_code || '', title: ev.title, event_date: ev.event_date, upload_until: ev.album_upload_until || null, view_until: ev.album_view_until || null, film_url: ev.album_film_url || '', welcome: ev.album_welcome || '' },
+        items: all.filter(m => m.event_id === ev.id && (m.status === 'ok' || m.status === 'hidden')).sort((a, b) => (b.reported - a.reported) || b.created_at.localeCompare(a.created_at)).map(m => ({ id: m.id, path: m.path, thumb: m.thumb_path, kind: m.kind, uploader: m.uploader, status: m.status, reported: m.reported, created_at: m.created_at, size: m.size + m.thumb_size, caption: m.caption || '' })),
         usage: dUsage(ev.id), limit: LIMIT,
         purge: all.filter(m => m.status === 'deleted' || (ev.album_view_until && todayBerlin() > ev.album_view_until && m.event_id === ev.id)).map(m => ({ id: m.id, path: m.path, thumb: m.thumb_path })) };
     },
     async adminAlbumSave(key, evId, s) {
       dAdmin(key); const d = dload(); const ev = d.events.find(e => e.id === evId); if (!ev) throw new ApiError('invalid');
       if (s.film_url && !/^https:\/\//i.test(s.film_url)) throw new ApiError('invalid');
-      Object.assign(ev, { album_upload_until: s.upload_until || null, album_view_until: s.view_until || null, album_film_url: (s.film_url || '').trim() }); dsave(d);
+      if (!s.upload_until || !s.view_until || s.upload_until > s.view_until) throw new ApiError('invalid');
+      Object.assign(ev, { album_upload_until: s.upload_until, album_view_until: s.view_until, album_film_url: (s.film_url || '').trim(), album_welcome: String(s.welcome || '').trim().slice(0, 1000) }); dsave(d);
       return demoAlbum.adminAlbum(key, evId);
     },
+    async adminMediaCaption(key, evId, id, caption) { dAdmin(key); const l = dmLoad(); const m = l.find(x => x.id === id); if (m) { m.caption = String(caption || '').trim().slice(0, 300); dmSave(l); } return demoAlbum.adminAlbum(key, evId); },
     async adminAlbumNewCode(key, evId) { dAdmin(key); const d = dload(); const ev = d.events.find(e => e.id === evId); if (ev) { ev.album_code = newCode(); dsave(d); } return demoAlbum.adminAlbum(key, evId); },
     async adminMediaSet(key, evId, id, status) { dAdmin(key); const l = dmLoad(); const m = l.find(x => x.id === id); if (m) { m.status = status; if (status === 'ok') m.reported = false; dmSave(l); } return demoAlbum.adminAlbum(key, evId); },
     async adminAlbumClear(key, evId) { dAdmin(key); const l = dmLoad(); l.forEach(m => { if (m.event_id === evId) m.status = 'deleted'; }); dmSave(l); return demoAlbum.adminAlbum(key, evId); }
@@ -291,7 +297,8 @@
     mediaUrl: path => path ? base() + '/storage/v1/object/public/lg-media/' + path : '',
     downloadUrl: (path, name) => base() + '/storage/v1/object/public/lg-media/' + path + '?download=' + encodeURIComponent(name || ''),
     adminAlbum: (key, ev) => rpc('lg_admin_album', { p_key: key, p_event: ev }),
-    adminAlbumSave: (key, ev, s) => rpc('lg_admin_album_save', { p_key: key, p_event: ev, p_code: s.code || null, p_upload_until: s.upload_until || null, p_view_until: s.view_until || null, p_film_url: s.film_url || null }),
+    adminAlbumSave: (key, ev, s) => rpc('lg_admin_album_save', { p_key: key, p_event: ev, p_upload_until: s.upload_until || null, p_view_until: s.view_until || null, p_film_url: s.film_url || null, p_welcome: s.welcome || null }),
+    adminMediaCaption: (key, ev, id, caption) => rpc('lg_admin_media_caption', { p_key: key, p_event: ev, p_id: id, p_caption: caption || null }),
     adminAlbumNewCode: (key, ev) => rpc('lg_admin_album_newcode', { p_key: key, p_event: ev }),
     adminMediaSet: (key, ev, id, status) => rpc('lg_admin_media_set', { p_key: key, p_event: ev, p_id: id, p_status: status }),
     adminAlbumClear: (key, ev) => rpc('lg_admin_album_clear', { p_key: key, p_event: ev })

@@ -688,6 +688,7 @@
         <div class="row2"><div class="field"><label for="aup">Hochladen bis</label><input type="date" id="aup" value="${esc(s.upload_until || '')}"></div>
         <div class="field"><label for="avw">Ansehen bis (danach automatisch gelöscht)</label><input type="date" id="avw" value="${esc(s.view_until || '')}"></div></div>
         <div class="field"><label for="afilm">Link zum Film vom Filmer (optional)</label><input type="url" id="afilm" value="${esc(s.film_url || '')}" placeholder="https://…"></div>
+        <div class="field"><label for="awel">Begrüßung oben im Album (optional)</label><textarea id="awel" rows="4" maxlength="1000" placeholder="z. B. Danke an alle für den tollen Lehrgang! Nächster Termin: … Links (https://…) werden antippbar." style="width:100%;font:inherit;background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px">${esc(s.welcome || '')}</textarea></div>
         <p class="err" id="aerr" hidden></p>
         <div style="display:flex;justify-content:flex-end"><button class="btn" type="submit">Speichern</button></div>
       </form>
@@ -711,7 +712,7 @@
       <div class="poster printing print-only" id="apost" style="display:none"></div>`;
     $('alf').onsubmit = async ev => {
       ev.preventDefault();
-      const st = { upload_until: $('aup').value || null, view_until: $('avw').value || null, film_url: $('afilm').value.trim() };
+      const st = { upload_until: $('aup').value || null, view_until: $('avw').value || null, film_url: $('afilm').value.trim(), welcome: $('awel').value.trim() };
       const err = t => { $('aerr').textContent = t; $('aerr').hidden = false; };
       if (st.film_url && !/^https:\/\//i.test(st.film_url)) return err('Der Film-Link muss mit https:// beginnen.');
       if (!st.view_until) return err('Bitte „Ansehen bis“ eintragen – so lange ist das Album offen, danach wird alles gelöscht.');
@@ -768,6 +769,7 @@
     const src = api.mediaUrl(x.path);
     openDialog(`<h2 style="margin:0">${x.kind === 'video' ? 'Clip' : 'Foto'} von ${esc(x.uploader || 'Gast')}</h2>
       <div style="background:#000;border-radius:10px;overflow:hidden;display:grid;place-items:center;max-height:55vh">${x.kind === 'video' ? `<video src="${esc(src)}" controls playsinline style="max-width:100%;max-height:55vh"></video>` : `<img src="${esc(src)}" alt="" style="max-width:100%;max-height:55vh;display:block">`}</div>
+      <div class="field"><label for="mcap">Bildunterschrift (optional, sehen alle)</label><div style="display:flex;gap:6px"><input id="mcap" maxlength="300" value="${esc(x.caption || '')}" placeholder="z. B. Befreiung aus dem Würgegriff" style="flex:1;min-width:0"><button class="btn small" type="button" id="mcaps">Speichern</button></div></div>
       <p class="muted small" style="margin:0">${new Date(x.created_at).toLocaleString('de-DE')}${x.reported ? ' · <b style="color:#ff8f9c">gemeldet („Bitte entfernen“)</b>' : ''}</p>
       <div class="row">
         ${x.status === 'hidden' ? '<button class="btn small" type="button" data-ms="ok">Wieder zeigen</button>' : '<button class="btn ghost small" type="button" data-ms="hidden">Ausblenden</button>'}
@@ -779,8 +781,10 @@
     let armed = false;
     $('mdel').onclick = () => { if (!armed) { armed = true; $('mdel').textContent = 'Wirklich löschen?'; return; } set('deleted'); };
     $('mcl').onclick = closeDialog;
+    $('mcaps').onclick = async () => { $('mcaps').disabled = true; try { album = await api.adminMediaCaption(key, eventId, x.id, $('mcap').value); album._ev = eventId; closeDialog(); albumMsg = 'Bildunterschrift gespeichert.'; drawAlbum(m); } catch (e) { $('mcaps').disabled = false; $('mcaps').textContent = e.code === 'network' ? 'Kein Netz' : 'Fehler'; } };
   }
 
+  function plusDays(d, n) { if (!d) return ''; const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); }
   /* ---------- Lehrgänge ---------- */
   function renderEvents(m, editId) {
     const evs = (data && data.events) || [];
@@ -795,17 +799,25 @@
         <div class="row2"><div class="field"><label for="ed">Datum</label><input type="date" id="ed" value="${esc(ed.event_date || '')}"></div>
         <div class="field"><label for="eti">Uhrzeit</label><input type="text" id="eti" value="${esc(ed.time_text || '')}" placeholder="13:30–17:00 Uhr"></div></div>
         <div class="field"><label for="el">Ort (Halle, Straße, Ort mit Kommas getrennt)</label><input type="text" id="el" value="${esc(ed.location || '')}"></div>
+        <div class="row2"><div class="field"><label for="eup">📷 Fotoalbum: Hochladen bis</label><input type="date" id="eup" value="${esc(ed.album_upload_until || plusDays(ed.event_date, 14))}"></div>
+        <div class="field"><label for="evw">📷 Fotoalbum: Ansehen bis</label><input type="date" id="evw" value="${esc(ed.album_view_until || plusDays(ed.event_date, 43))}"></div></div>
+        <p class="muted small" style="margin:-8px 0 0">Wird mit dem Datum automatisch vorgeschlagen: 2 Wochen hochladen, 6 Wochen ansehen – danach wird das Album gelöscht. Steht so auf Kärtchen und Plakat. Längere Zeiten nur nach Absprache mit den Veranstaltern.</p>
         <label class="check"><input type="checkbox" id="ea" ${ed.active ? 'checked' : ''}> Für diesen Lehrgang ist die Voranmeldung offen (nur einer gleichzeitig)</label>
         <p class="err" id="eerr" hidden></p>
         <div class="row" style="display:flex;gap:8px;justify-content:flex-end">${ed.id ? '<button class="btn ghost" id="enew" type="button">Neu statt bearbeiten</button>' : ''}<button class="btn" type="submit">Speichern</button></div>
         <p class="muted small" style="margin:0">Braucht Internet.</p></form>`;
     m.querySelectorAll('[data-show]').forEach(b => b.onclick = async () => { eventId = b.dataset.show; L.store('lg_event', eventId); if (queue.length) await sync(); try { data = await api.adminData(key, eventId); saveLocal(); markSynced(); } catch (e) {} tab = 'einlass'; renderTop(); renderMain(); });
     m.querySelectorAll('[data-ed]').forEach(b => b.onclick = () => renderEvents(m, b.dataset.ed));
+    let touched = !!(ed.album_upload_until || ed.album_view_until);
+    $('eup').oninput = $('evw').oninput = () => { touched = true; };
+    $('ed').onchange = () => { if (!touched || !$('eup').value || !$('evw').value) { $('eup').value = plusDays($('ed').value, 14); $('evw').value = plusDays($('ed').value, 43); } };
     if ($('enew')) $('enew').onclick = () => renderEvents(m);
     $('evf').onsubmit = async ev => {
       ev.preventDefault();
-      const e = { id: ed.id || '', title: $('et').value.trim(), event_date: $('ed').value, time_text: $('eti').value.trim(), location: $('el').value.trim(), active: $('ea').checked };
+      const e = { id: ed.id || '', title: $('et').value.trim(), event_date: $('ed').value, time_text: $('eti').value.trim(), location: $('el').value.trim(), active: $('ea').checked, album_upload_until: $('eup').value || null, album_view_until: $('evw').value || null };
       if (!e.title) { $('eerr').textContent = 'Bitte einen Titel eintragen.'; $('eerr').hidden = false; return; }
+      if (!e.event_date) { $('eerr').textContent = 'Bitte ein Datum eintragen – daraus ergibt sich auch, wie lange das Fotoalbum offen ist.'; $('eerr').hidden = false; return; }
+      if (e.album_upload_until && e.album_view_until && e.album_upload_until > e.album_view_until) { $('eerr').textContent = 'Fotoalbum: „Hochladen bis“ muss vor „Ansehen bis“ liegen.'; $('eerr').hidden = false; return; }
       try { const d = await api.adminSaveEvent(key, e); data = d; eventId = d.event_id; L.store('lg_event', eventId); saveLocal(); markSynced(); renderTop(); renderEvents(m); }
       catch (x) { $('eerr').textContent = x.code === 'network' ? 'Keine Verbindung. Lehrgänge lassen sich nur mit Internet anlegen.' : 'Speichern hat nicht geklappt.'; $('eerr').hidden = false; }
     };

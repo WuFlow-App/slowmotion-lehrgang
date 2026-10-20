@@ -143,6 +143,8 @@
     return it;
   }
 
+  // Text sicher anzeigen, https-Links antippbar
+  function linkify(t) { return esc(t).replace(/https:\/\/[^\s<]+/g, u => `<a href="${u}" target="_blank" rel="noopener" style="color:var(--gold)">${u}</a>`); }
   function render() {
     const e = data.event;
     $('sub').textContent = [e.title, e.event_date ? L.fmtDate(e.event_date) : ''].filter(Boolean).join(' · ');
@@ -150,6 +152,7 @@
     const needName = !data.name;
     main.innerHTML = `
       <div class="ainfo">${e.can_upload ? `Hochladen bis <b>${fmtDay(e.upload_until)}</b> · ` : ''}Ansehen bis <b>${fmtDay(e.view_until)}</b> – bitte vorher herunterladen, danach wird alles gelöscht.</div>
+      ${e.welcome ? `<div class="card welcome" style="gap:6px"><div class="muted small" style="font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--gold)">Von den Veranstaltern</div><div style="white-space:pre-line;overflow-wrap:anywhere">${linkify(e.welcome)}</div></div>` : ''}
       ${e.film_url ? `<a class="btn ghost block film" href="${esc(e.film_url)}" target="_blank" rel="noopener">🎬 Film vom Lehrgang (Profi-Aufnahmen)</a>` : ''}
       ${e.can_upload ? `<section class="card upl">
         ${needName ? `<div class="field"><label for="nm">Dein Vorname (steht bei deinen Bildern)</label><input id="nm" maxlength="40" autocomplete="given-name" value="${esc(L.store('lg_album_name') || '')}"></div>` : `<div class="muted small">Du lädst hoch als <b style="color:var(--ink)">${esc(data.name)}</b></div>`}
@@ -177,7 +180,7 @@
       return `<button class="tile" type="button" data-i="${i}" aria-label="${x.kind === 'video' ? 'Clip' : 'Foto'} von ${esc(x.uploader)}">
         ${src ? `<img src="${esc(src)}" alt="" loading="lazy" decoding="async">` : ''}
         ${x.kind === 'video' ? `<span class="play">▶</span>${x.duration ? `<span class="dur">0:${String(Math.round(x.duration)).padStart(2, '0')}</span>` : ''}` : ''}
-        ${x.mine ? '<span class="me">Meins</span>' : ''}</button>`;
+        ${x.mine ? '<span class="me">Meins</span>' : ''}${x.caption ? '<span class="dur" style="left:5px;right:auto">💬</span>' : ''}</button>`;
     }).join('');
     g.querySelectorAll('[data-i]').forEach(b => b.onclick = () => openViewer(+b.dataset.i));
   }
@@ -209,6 +212,7 @@
       <div class="vmid" id="vm">${isV ? `<video src="${esc(src)}" controls playsinline preload="metadata" ${x.thumb ? `poster="${esc(api.mediaUrl(x.thumb))}"` : ''}></video>` : `<img src="${esc(src)}" alt="">`}
         ${it.length > 1 ? '<button class="vnav prev" type="button" id="vp" aria-label="Vorheriges">‹</button><button class="vnav next" type="button" id="vn" aria-label="Nächstes">›</button>' : ''}</div>
       <div class="vbot">
+        ${x.caption ? `<div style="font-size:15px;font-weight:700">💬 ${esc(x.caption)}</div>` : ''}
         <div class="vmeta">${isV ? 'Clip' : 'Foto'} von <b>${esc(x.uploader || 'Gast')}</b> · ${fmtTime(x.created_at)}</div>
         <div class="vacts">
           <a class="btn gold small" href="${esc(api.downloadUrl(x.path, fileName(x, vIdx)))}" download="${esc(fileName(x, vIdx))}" target="_blank" rel="noopener">⬇︎ Herunterladen</a>
