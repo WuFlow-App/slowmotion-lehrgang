@@ -1,0 +1,673 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0d0b0c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Slowmotion Einlass</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .top { position: sticky; top: 0; z-index: 5; background: var(--bg); padding-block: 12px 10px; border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
+  .top-row { display: flex; align-items: center; gap: 10px; justify-content: space-between; flex-wrap: wrap; }
+  .ev-title { font-weight: 900; font-style: italic; text-transform: uppercase; font-size: 18px; line-height: 1.1; }
+  .ev-sub { font-size: 13px; color: var(--muted); }
+  .pill { display: inline-flex; align-items: center; gap: 7px; border-radius: 99px; padding: 5px 11px; font-size: 13px; font-weight: 700; background: var(--panel-2); border: 1px solid var(--line); white-space: nowrap; }
+  .pill i { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); display: inline-block; }
+  .pill.off i { background: var(--warn); }
+  .pill.err i { background: #ff5d6c; }
+  .counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .count { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+  .count b { display: block; font-size: 24px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .count span { font-size: 12px; color: var(--muted); }
+  .tabs { display: flex; gap: 6px; overflow-x: auto; }
+  .tabs button { flex: none; border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 9px 14px; font-weight: 700; font-size: 14px; cursor: pointer; }
+  .tabs button[aria-selected="true"] { background: var(--red-2); border-color: transparent; color: #fff; }
+  main { padding-block: 14px 60px; display: grid; gap: 14px; }
+  .tools { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+  .tools2 { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { border: 1px solid var(--line); background: var(--panel); border-radius: 99px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .chip[aria-pressed="true"] { background: var(--gold); color: #1c1307; border-color: transparent; }
+  .list { display: grid; gap: 8px; }
+  .person { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 10px 10px 14px; }
+  .person.is-present { border-color: #2c6b4b; background: #14211b; }
+  .person .who { min-width: 0; cursor: pointer; background: none; border: 0; padding: 0; text-align: left; }
+  .person .nm { font-weight: 800; font-size: 17px; line-height: 1.2; overflow-wrap: anywhere; }
+  .person .sub { font-size: 13px; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 2px; }
+  .tag { font-size: 11px; font-weight: 800; border-radius: 6px; padding: 1px 6px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); }
+  .tag.nofoto { background: #3a1419; border-color: #6b2330; color: #ffb3bd; }
+  .tog.bz.on { background: #1f6b45; border-color: #2f9a63; color: #fff; }
+  .tog.bz.open { border-color: #6b2330; color: #ff9aa7; }
+  .tog.bz.due { background: #7a1626; border-color: #c4213a; color: #fff; }
+  .count { text-align: left; cursor: pointer; color: inherit; font: inherit; }
+  .count.warn { border-color: #c4213a; }
+  .count.warn b { color: #ff8f9c; }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; }
+  .bar .sel { display: grid; gap: 2px; flex: 1 1 150px; font-size: 12px; color: var(--muted); }
+  .bar .sel select { width: 100%; padding: 9px 34px 9px 12px; font-size: 15px; }
+  details.card > summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  details.card > summary::-webkit-details-marker { display: none; }
+  details.card > summary::after { content: '▾'; color: var(--gold); transition: transform .15s; }
+  details.card[open] > summary::after { transform: rotate(180deg); }
+  details.card > summary h2 { margin: 0; }
+  details.card > summary .sum { margin-left: auto; color: var(--muted); font-size: 14px; font-weight: 700; }
+  .tog.bz.red { background: #4a2f12; border-color: #c98a2e; color: #ffd08a; }
+  .tog.bz.free { background: #1d2a3a; border-color: #4b77b5; color: #a9c8ff; }
+  details.prices { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+  details.prices summary { cursor: pointer; font-weight: 700; }
+  details.prices[open] { display: grid; gap: 10px; }
+  body.kiosk-on { overflow: hidden; }
+  .kiosk { position: fixed; inset: 0; z-index: 50; background: var(--bg); overflow: auto; padding: max(16px, env(safe-area-inset-top)) 16px 40px; }
+  .kwrap { max-width: 640px; margin: 0 auto; display: grid; gap: 14px; }
+  .khead { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .khead select { width: auto; padding: 8px 34px 8px 12px; font-size: 14px; }
+  .kdone { text-align: center; padding-top: 12vh; }
+  .kcheck { font-size: 64px; color: var(--ok); line-height: 1; }
+  .kpw { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: grid; place-items: center; padding: 16px; }
+  .kpw .kwrap { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; width: 100%; max-width: 420px; }
+  .paygrp { display: flex; gap: 4px; }
+  .tog.more { min-width: 40px; width: 40px; font-size: 20px; }
+  .tog.more.bigtog { width: 56px; min-width: 56px; }
+  .pm { display: grid; gap: 8px; }
+  .stale { background: #3a2a10; border: 1px solid #a8741f; color: #ffd08a; border-radius: 10px; padding: 8px 12px; font-size: 13px; }
+  .pill small { opacity: .7; font-weight: 600; }
+  .cashres { font-size: 16px; }
+  .cashres .ok { color: var(--ok); } .cashres .bad { color: #ff8f9c; }
+  .tag.dup { background: #3a2f12; border-color: #8a6a1f; color: #f3d68c; }
+  .tag.pre { background: #14211b; border-color: #2c6b4b; color: #7fe0ae; }
+  .sortby { display: flex; align-items: center; gap: 8px; }
+  .sortby select { width: auto; padding: 8px 34px 8px 12px; font-size: 14px; }
+  .tog { min-width: 78px; height: 52px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel-2); font-weight: 800; font-size: 14px; cursor: pointer; display: grid; place-items: center; line-height: 1.1; }
+  .tog.on.da { background: var(--ok); border-color: var(--ok); color: #06210f; }
+  .tog.on.bz { background: #1f6b45; border-color: #2f9a63; color: #fff; }
+  .empty { text-align: center; color: var(--muted); padding: 24px 8px; }
+  dialog { border: 1px solid var(--line); border-radius: 18px; background: var(--panel); color: var(--ink); padding: 0; width: min(520px, calc(100vw - 24px)); max-height: calc(100vh - 24px); }
+  dialog::backdrop { background: rgba(0,0,0,.7); }
+  .dlg { padding: 18px; display: grid; gap: 14px; }
+  .dlg .row { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .welcome { text-align: center; display: grid; gap: 10px; }
+  .welcome .big { font-size: 28px; font-weight: 900; line-height: 1.15; }
+  .welcome .ok { font-size: 46px; line-height: 1; color: var(--ok); }
+  .bigtog { height: 64px; font-size: 20px; border-radius: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); }
+  th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  td.n, th.n { text-align: right; }
+  .table-wrap { overflow-x: auto; }
+  .poster { background: #fff; color: #111; border-radius: 16px; padding: 22px; display: grid; gap: 12px; justify-items: center; text-align: center; }
+  .poster .p-title { font-weight: 900; font-style: italic; text-transform: uppercase; font-size: 34px; line-height: 1; }
+  .poster .p-qr { width: min(70vw, 320px); }
+  .poster .p-qr svg { width: 100%; height: auto; display: block; }
+  .poster .p-url { font: 600 14px ui-monospace, Menlo, monospace; overflow-wrap: anywhere; }
+  video { width: 100%; border-radius: 12px; background: #000; aspect-ratio: 3/4; object-fit: cover; }
+  .print-only { display: none; }
+  @media print {
+    body { background: #fff; color: #000; padding: 0; }
+    .top, main > *:not(.printing), footer, .demo { display: none !important; }
+    main { padding: 0; }
+    .printing { display: block !important; }
+    .print-only { display: block; }
+    .poster { border-radius: 0; padding: 30mm 15mm; }
+    .poster .p-qr { width: 110mm; }
+    .plist { color: #000; }
+    .plist th, .plist td { border-bottom: 1px solid #999; color: #000; padding: 5px 6px; font-size: 12px; }
+    .plist .box { display: inline-block; width: 14px; height: 14px; border: 1.5px solid #000; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap wide">
+  <div id="app"></div>
+</div>
+<dialog id="dlg"><div class="dlg" id="dlgBody"></div></dialog>
+
+<script src="config.js"></script>
+<script src="lang.js"></script>
+<script src="lib/qrcode.js"></script>
+<script src="common.js"></script>
+<script>
+(function () {
+  const L = window.LG, api = L.api, esc = L.esc;
+  const $ = id => document.getElementById(id);
+  const app = $('app'), dlg = $('dlg'), dlgBody = $('dlgBody');
+  L.registerSW();
+
+  let key = L.store('lg_key');
+  let eventId = L.store('lg_event') || null;
+  let data = L.storeJson('lg_cache');          // {events, event_id, people, server_time}
+  let queue = L.storeJson('lg_queue') || [];   // ausstehende Änderungen
+  let tab = 'einlass', filter = 'todo', search = '', sortBy = 'name';
+  let syncState = 'idle', lastSync = L.store('lg_last_sync'), flushing = false, timer = null;
+  let pendingTicket = (location.hash || '').replace('#', '').toUpperCase() || null;
+
+  function saveLocal() { L.storeJson('lg_cache', data); L.storeJson('lg_queue', queue); }
+  function people() { return (data && data.people) || []; }
+  function event() { return data && data.events ? (data.events.find(e => e.id === data.event_id) || null) : null; }
+
+  /* ---------- Dialog ---------- */
+  function openDialog(html) { dlgBody.innerHTML = html; if (dlg.showModal) { if (!dlg.open) dlg.showModal(); } else dlg.setAttribute('open', ''); }
+  function closeDialog() { stopScan(); if (dlg.close) dlg.close(); else dlg.removeAttribute('open'); }
+  dlg.addEventListener('close', stopScan);
+  dlg.addEventListener('click', e => { if (e.target === dlg) closeDialog(); });
+
+  /* ---------- Anmeldung am Gerät ---------- */
+  function showLogin(msg) {
+    app.innerHTML = `<div class="hero"><div class="shield" style="width:110px;height:92px">${L.SHIELD}</div><h1 class="title" style="font-size:40px">Einlass</h1></div>
+      <form class="card" id="lf" style="max-width:420px;margin:0 auto">
+        <h2>Gerät anmelden</h2>
+        <p class="muted small" style="margin:0">Einmal mit Internet anmelden. Das Gerät bleibt angemeldet und funktioniert danach auch ohne Netz.</p>
+        ${L.online ? '' : '<div class="demo" style="margin:0">Vorschau-Modus: Passwort <b>demo</b></div>'}
+        <div class="field"><label for="pw">Einlass-Passwort</label><input type="password" id="pw" autocomplete="current-password"></div>
+        ${msg ? `<p class="err">${esc(msg)}</p>` : ''}
+        <button class="btn block" type="submit" id="lb">Anmelden</button>
+      </form>`;
+    $('lf').onsubmit = async ev => {
+      ev.preventDefault(); $('lb').disabled = true;
+      try {
+        const d = await api.adminData($('pw').value, null);
+        key = $('pw').value; L.store('lg_key', key);
+        data = d; eventId = d.event_id; L.store('lg_event', eventId); queue = []; saveLocal(); markSynced();
+        start();
+      } catch (e) {
+        showLogin(e.code === 'bad_key' ? 'Das Passwort stimmt nicht.' : 'Keine Verbindung. Für die erste Anmeldung braucht das Gerät Internet.');
+      }
+    };
+  }
+
+  /* ---------- Abgleich ---------- */
+  function markSynced() { lastSync = new Date().toISOString(); L.store('lg_last_sync', lastSync); syncState = 'ok'; }
+  async function sync() {
+    if (flushing || !key) return; flushing = true;
+    try {
+      let d;
+      if (queue.length) {
+        const ops = queue.slice();
+        d = await api.adminSync(key, eventId, ops);
+        queue = queue.slice(ops.length);
+        if (queue.length) d.people = L.applyOps(d.people, queue, d.event_id);
+      } else {
+        d = await api.adminData(key, eventId);
+        // Während der Abfrage neu abgehakte Personen nicht überschreiben
+        if (queue.length) d.people = L.applyOps(d.people, queue, d.event_id);
+      }
+      data = d; eventId = d.event_id; L.store('lg_event', eventId); saveLocal(); markSynced();
+    } catch (e) {
+      if (e.code === 'bad_key') { L.store('lg_key', null); key = null; flushing = false; return showLogin('Das Passwort wurde geändert. Bitte neu anmelden.'); }
+      syncState = e.code === 'network' ? 'offline' : 'error';
+    } finally { flushing = false; }
+    renderTop(); renderMain(true);
+  }
+  function act(op) {
+    if (op.op === 'set' || op.op === 'add') op.at = op.at || new Date().toISOString();
+    queue.push(op); data.people = L.applyOps(people(), [op], data.event_id);
+    if (op.op === 'add') L.sortPeople(data.people);
+    saveLocal(); renderTop(); renderMain(true);
+    clearTimeout(timer); timer = setTimeout(sync, 400);
+  }
+  window.addEventListener('online', () => sync());
+  // Mehrere Geräte gleichzeitig: alle 10 Sekunden abgleichen, sofort beim Zurückkehren in die Seite
+  setInterval(() => { if (!document.hidden) sync(); }, 10000);
+  setInterval(() => { if (!document.hidden && !$('kioskBox')) renderTop(); }, 15000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
+
+  /* ---------- Gerüst ---------- */
+  function start() {
+    app.innerHTML = `<div class="top" id="top"></div>${L.online ? '' : '<div class="demo">Vorschau-Modus: Daten nur in diesem Browser. <button class="btn small ghost" id="seed" type="button">10 Beispiel-Anmeldungen</button> <button class="btn small ghost" id="reset" type="button">Vorschau zurücksetzen</button></div>'}<main id="main"></main>`;
+    if (!L.online) {
+      $('seed').onclick = () => { L.demo.seed(10); sync(); };
+      $('reset').onclick = () => { L.demo.reset(); location.reload(); };
+    }
+    renderTop(); renderMain();
+    sync().then(() => { if (pendingTicket) handleTicket(pendingTicket); });
+    if (pendingTicket && data) handleTicket(pendingTicket);
+  }
+
+  function counts() {
+    const p = people();
+    // Zahlstatus: bezahlt (zählt für die Kasse) · frei (z. B. Ehrenmitglied, zählt NICHT für die Kasse) · offen
+    return { all: p.length, da: p.filter(x => x.present).length, paid: p.filter(x => x.paid && !x.free).length, free: p.filter(x => x.free).length, open: p.filter(x => x.present && !x.paid && !x.free).length };
+  }
+
+  document.addEventListener('click', e => { const b = e.target.closest('[data-cf]'); if (!b) return; filter = b.dataset.cf; tab = 'einlass'; renderTop(); renderMain(); });
+  function renderTop() {
+    const top = $('top'); if (!top) return;
+    const e = event(), c = counts();
+    let pill;
+    if (queue.length && syncState !== 'ok') pill = `<span class="pill off"><i></i>Ohne Netz · ${queue.length} ${queue.length === 1 ? 'Änderung wartet' : 'Änderungen warten'}</span>`;
+    else if (queue.length) pill = `<span class="pill off"><i></i>Speichert …</span>`;
+    else if (syncState === 'offline') pill = `<span class="pill off"><i></i>Ohne Netz · alles gespeichert</span>`;
+    else if (syncState === 'error') pill = `<span class="pill err"><i></i>Fehler beim Abgleich</span>`;
+    else pill = `<span class="pill"><i></i>Online · alles gespeichert</span>`;
+    const age = lastSync ? (Date.now() - new Date(lastSync).getTime()) / 1000 : Infinity;
+    const stamp = lastSync ? new Date(lastSync).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '–';
+    const stale = age > 60 ? `<div class="stale">⚠ Dieses Gerät zeigt evtl. einen älteren Stand (letzter Abgleich ${stamp} Uhr${queue.length ? `, ${queue.length} Änderung${queue.length === 1 ? '' : 'en'} warten` : ''}). Internet prüfen, notfalls Hotspot. Nichts geht verloren.</div>` : '';
+    pill = pill.replace('</span>', ` <small>· ${stamp}</small></span>`);
+    top.innerHTML = `<div class="top-row"><div><div class="ev-title">${esc(e ? e.title : 'Lehrgang')}</div><div class="ev-sub">${e ? esc([L.fmtDate(e.event_date), e.time_text].filter(Boolean).join(' · ')) : ''}</div></div>${pill}</div>
+      ${stale}
+      <div class="counts"><button class="count" type="button" data-cf="da"><b>${c.da}</b><span>von ${c.all} da</span></button><button class="count" type="button" data-cf="alle"><b>${c.paid}</b><span>bezahlt${c.free ? ` · ${c.free} frei` : ''}</span></button><button class="count ${c.open ? 'warn' : ''}" type="button" data-cf="zahlen"><b>${c.open}</b><span>da, Bezahlung offen</span></button></div>
+      <div class="tabs" role="tablist">${[['einlass', 'Einlass'], ['uebersicht', 'Übersicht'], ['plakat', 'Plakat'], ['lehrgaenge', 'Lehrgänge']].map(([k, v]) => `<button role="tab" aria-selected="${tab === k}" data-tab="${k}">${v}</button>`).join('')}</div>`;
+    top.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; renderTop(); renderMain(); });
+  }
+
+  function renderMain(soft) {
+    const m = $('main'); if (!m) return;
+    if (tab === 'einlass') return soft && $('list') ? renderList() : renderEinlass(m);
+    if (soft && tab !== 'uebersicht') return;
+    if (tab === 'uebersicht') return renderOverview(m);
+    if (tab === 'plakat') return renderPoster(m);
+    if (tab === 'lehrgaenge') return renderEvents(m);
+  }
+
+  /* ---------- Einlass ---------- */
+  const canScan = 'BarcodeDetector' in window;
+  function renderEinlass(m) {
+    m.innerHTML = `<div class="tools"><input type="search" id="q" placeholder="Name oder Code suchen" value="${esc(search)}" autocomplete="off" aria-label="Name oder Code suchen"><button class="btn gold" id="add" type="button">+ Gast</button></div>
+      <button class="btn ghost small" id="kiosk" type="button" title="Gerät der Person geben: Sie trägt sich selbst ein, ohne die Liste zu sehen">✍︎ Gast tippt selbst</button>
+      <div class="bar">${canScan ? '<button class="btn ghost small" id="scan" type="button">QR scannen</button>' : ''}
+        <label class="sel"><span>Anzeigen</span><select id="flt">${[['todo', 'Noch zu erledigen'], ['offen', 'Noch nicht da'], ['vorab', 'Vorangemeldet, noch nicht da'], ['zahlen', 'Da, Bezahlung offen'], ['da', 'Da'], ['doppelt', 'Mögliche Doppeleinträge'], ['alle', 'Alle']].map(([k, v]) => `<option value="${k}" ${filter === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+        <label class="sel"><span>Sortieren</span><select id="sort">${[['name', 'Name'], ['schule', 'Schule'], ['stufe', 'Stufe'], ['vorab', 'Vorangemeldet zuerst'], ['ankunft', 'Ankunft']].map(([k, v]) => `<option value="${k}" ${sortBy === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label></div>
+      <p class="muted small" id="fhint" style="margin:0"></p>
+      <div class="list" id="list"></div>
+      ${canScan ? '' : '<p class="muted small" style="margin:0">QR-Codes scannst du mit der normalen Kamera-App: Dann öffnet sich diese Seite und hakt die Person automatisch ab.</p>'}
+      <details class="prices"${prices().regular == null ? '' : ''}><summary>Einstellung: Preise – ${prices().regular != null ? eur(prices().regular) : 'noch nicht festgelegt'}${prices().reduced != null ? ' · ermäßigt ' + eur(prices().reduced) : ''}</summary>
+        <div class="row2"><div class="field"><label for="preg">Regulär (€)</label><input type="text" inputmode="decimal" id="preg" value="${prices().regular ?? ''}" placeholder="z. B. 50"></div>
+        <div class="field"><label for="pred">Ermäßigt (€), z. B. Familie</label><input type="text" inputmode="decimal" id="pred" value="${prices().reduced ?? ''}" placeholder="z. B. 30"></div></div>
+        <div class="row"><button class="btn small" id="psave" type="button">Preise speichern</button><span class="muted small" id="pmsg">Nur hier für Veranstalter sichtbar, nicht auf der Anmeldeseite.</span></div></details>`;
+    $('q').oninput = e => { search = e.target.value; renderList(); };
+    $('sort').onchange = e => { sortBy = e.target.value; renderList(); };
+    $('flt').onchange = e => { filter = e.target.value; renderList(); };
+    $('psave').onclick = async () => {
+      const num = v => { v = String(v).trim().replace(',', '.'); return v === '' ? null : (isFinite(+v) && +v >= 0 ? +v : NaN); };
+      const r = num($('preg').value), red = num($('pred').value);
+      if (Number.isNaN(r) || Number.isNaN(red)) { $('pmsg').textContent = 'Bitte nur Zahlen eintragen, z. B. 50 oder 30,50.'; return; }
+      $('psave').disabled = true; $('pmsg').textContent = 'Wird gespeichert …';
+      try { if (queue.length) await sync(); data = await api.adminSetPrices(key, eventId || data.event_id, r, red); saveLocal(); markSynced(); renderEinlass($('main')); }
+      catch (e) { $('pmsg').textContent = 'Speichern ging nicht (Internet?). Bitte später noch einmal.'; $('psave').disabled = false; }
+    };
+    $('add').onclick = () => addDialog();
+    $('kiosk').onclick = () => kiosk();
+    if (canScan) $('scan').onclick = scanDialog;
+    // (Filter jetzt als Auswahlfeld)
+    renderList();
+  }
+  // Zahlstatus reihum: offen → bezahlt (regulär) → ermäßigt → frei → offen. Betrag wird beim Antippen festgehalten.
+  function prices() { return (data && data.prices) || {}; }
+  function eur(v) { return v == null || v === '' ? '' : Number(v).toLocaleString('de-DE', { minimumFractionDigits: Number(v) % 1 ? 2 : 0, maximumFractionDigits: 2 }) + ' €'; }
+  function payState(x) { return x.free ? 'frei' : x.paid ? (x.reduced ? 'erm' : 'bez') : 'offen'; }
+  function nextPay(x) {
+    const pr = prices(), st = payState(x);
+    if (st === 'offen') return { paid: true, reduced: false, free: false, amount: pr.regular ?? null };
+    if (st === 'bez') return { paid: true, reduced: true, free: false, amount: pr.reduced ?? null };
+    if (st === 'erm') return { paid: false, reduced: false, free: true, amount: 0 };
+    return { paid: false, reduced: false, free: false, amount: null };
+  }
+  function payLabel(x) {
+    const st = payState(x), a = x.amount;
+    return st === 'bez' ? '✓ Bezahlt' + (a ? ' ' + eur(a) : '') : st === 'erm' ? '✓ Ermäßigt' + (a ? ' ' + eur(a) : '') : st === 'frei' ? '★ Frei' : 'Bezahlt';
+  }
+  function payMenu(id, anchorDone) {
+    const x = people().find(y => y.id === id); if (!x) return;
+    const pr = prices(), st = payState(x);
+    const opt = (k, label) => `<button class="btn block ${st === k ? 'gold' : 'ghost'}" type="button" data-pm="${k}">${label}</button>`;
+    openDialog(`<h2>Bezahlung: ${esc(x.first_name)} ${esc(x.last_name)}</h2>
+      <div class="pm">${opt('bez', '✓ Bezahlt' + (pr.regular != null ? ' – ' + eur(pr.regular) : ''))}${opt('erm', '✓ Ermäßigt' + (pr.reduced != null ? ' – ' + eur(pr.reduced) : ''))}${opt('frei', '★ Frei (Ehrenmitglied, eingeladener Gast)')}${opt('offen', 'Zurücksetzen: noch offen')}</div>
+      <div class="row"><button class="btn ghost" id="pmc" type="button">Abbrechen</button></div>`);
+    const val = { bez: { paid: true, reduced: false, free: false, amount: pr.regular ?? null }, erm: { paid: true, reduced: true, free: false, amount: pr.reduced ?? null }, frei: { paid: false, reduced: false, free: true, amount: 0 }, offen: { paid: false, reduced: false, free: false, amount: null } };
+    dlgBody.querySelectorAll('[data-pm]').forEach(b => b.onclick = () => { act(Object.assign({ op: 'set', id }, val[b.dataset.pm])); closeDialog(); if (anchorDone) anchorDone(); });
+    $('pmc').onclick = closeDialog;
+  }
+  // Hauptknopf: nur offen ↔ bezahlt (regulär). Ermäßigt/Frei/Zurücksetzen über „⋯“.
+  function mainPay(x) { return payState(x) === 'offen' ? { paid: true, reduced: false, free: false, amount: prices().regular ?? null } : null; }
+  function payClass(x) { const st = payState(x); return st === 'offen' ? (x.present ? 'due' : 'open') : { bez: 'on', erm: 'red', frei: 'free' }[st]; }
+  function payText(x) { const st = payState(x); return st === 'frei' ? 'frei' : st === 'erm' ? 'ermäßigt' + (x.amount ? ' ' + eur(x.amount) : '') : st === 'bez' ? 'ja' + (x.amount ? ' ' + eur(x.amount) : '') : 'nein'; }
+  // Kassensumme: festgehaltener Betrag, sonst aktueller Preis
+  function cash() {
+    const pr = prices(), p = people();
+    const reg = p.filter(x => payState(x) === 'bez'), red = p.filter(x => payState(x) === 'erm');
+    const val = (x, d) => x.amount != null ? Number(x.amount) : (d != null ? Number(d) : NaN);
+    const sum = reg.reduce((s, x) => s + val(x, pr.regular), 0) + red.reduce((s, x) => s + val(x, pr.reduced), 0);
+    return { reg: reg.length, red: red.length, free: p.filter(x => x.free).length, sum };
+  }
+  // Mögliche Doppeleinträge: gleicher Vor- und Nachname (ohne Groß/Klein, Akzente, Leerzeichen)
+  function dupIds() {
+    const by = {}; people().forEach(x => { const k = norm(x.first_name).replace(/\s+/g, '') + '|' + norm(x.last_name).replace(/\s+/g, ''); (by[k] = by[k] || []).push(x.id); });
+    return new Set(Object.values(by).filter(a => a.length > 1).flat());
+  }
+  function norm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+  function renderList() {
+    const list = $('list'); if (!list) return;
+    const q = norm(search.trim());
+    let p = people().filter(x => !q || norm(x.first_name + ' ' + x.last_name + ' ' + x.last_name + ' ' + x.first_name).includes(q) || norm(x.ticket).includes(q));
+    const done = x => x.present && (x.paid || x.free);
+    const dups = dupIds();
+    if (filter === 'doppelt') p = p.filter(x => dups.has(x.id));
+    if (filter === 'todo') p = p.filter(x => !done(x));
+    if (filter === 'vorab') p = p.filter(x => !x.present && x.source === 'vorab');
+    if (filter === 'offen') p = p.filter(x => !x.present);
+    if (filter === 'da') p = p.filter(x => x.present);
+    if (filter === 'zahlen') p = p.filter(x => x.present && !x.paid && !x.free);
+    const hidden = people().length - p.length;
+    if ($('fhint')) $('fhint').textContent = (filter === 'todo' && hidden ? `${hidden} erledigt (da und bezahlt/frei) ausgeblendet.` : '') + (dups.size && filter !== 'doppelt' ? ` ${dups.size} mögliche Doppeleinträge – unter „Anzeigen“ prüfen.` : '') + (filter === 'doppelt' ? 'Gleicher Name mehrfach. Falschen Eintrag antippen › „Entfernen“. Achtung: Es kann auch zwei verschiedene Personen mit gleichem Namen geben.' : '');
+    // Sortierung (Name ist immer die zweite Ebene)
+    const byName = (a, b) => (a.last_name + ' ' + a.first_name).localeCompare(b.last_name + ' ' + b.first_name, 'de', { sensitivity: 'base' });
+    const stIdx = x => { const i = L.STAGES.findIndex(s => s.id === x.stage); return i < 0 ? 99 : i; };
+    const scIdx = x => { const f = L.splitSchools(x.school)[0] || ''; const i = L.SCHOOLS.indexOf(f); return (i < 0 ? 50 : i) + ':' + f; };
+    const cmp = { name: byName,
+      schule: (a, b) => scIdx(a).localeCompare(scIdx(b), 'de', { numeric: true }) || byName(a, b),
+      stufe: (a, b) => stIdx(a) - stIdx(b) || byName(a, b),
+      vorab: (a, b) => (a.source === 'vorab' ? 0 : 1) - (b.source === 'vorab' ? 0 : 1) || byName(a, b),
+      ankunft: (a, b) => (a.present ? 0 : 1) - (b.present ? 0 : 1) || String(b.present_at || '').localeCompare(String(a.present_at || '')) || byName(a, b) }[sortBy] || byName;
+    p = p.slice().sort(cmp);
+    if (!p.length) {
+      list.innerHTML = `<div class="empty">${people().length ? 'Niemand gefunden.' : 'Noch keine Anmeldungen.'}<br><br><button class="btn gold small" id="addEmpty" type="button">+ Person ohne Voranmeldung eintragen</button></div>`;
+      $('addEmpty').onclick = () => addDialog(search);
+      return;
+    }
+    list.innerHTML = p.map(x => `<div class="person ${x.present ? 'is-present' : ''}" data-id="${x.id}">
+        <button class="who" type="button" data-edit="${x.id}"><div class="nm">${esc(x.last_name)}, ${esc(x.first_name)}</div>
+          <div class="sub">${L.stageBadge(x.stage)}<span>${esc(x.school)}</span>${x.photo_ok ? '' : '<span class="tag nofoto">kein Foto</span>'}${x.source === 'vor_ort' ? '<span class="tag">vor Ort</span>' : '<span class="tag pre">✓ vorangemeldet</span>'}${dups.has(x.id) ? '<span class="tag dup">doppelt?</span>' : ''}</div></button>
+        <button class="tog da ${x.present ? 'on' : ''}" data-da="${x.id}" aria-pressed="${x.present}">${x.present ? '✓ Da' : 'Da'}</button>
+        <div class="paygrp"><button class="tog bz ${payClass(x)}" data-bz="${x.id}">${payLabel(x)}</button><button class="tog more" data-pm="${x.id}" aria-label="Weitere Zahlungsoptionen">⋯</button></div>
+      </div>`).join('');
+    list.querySelectorAll('[data-da]').forEach(b => b.onclick = () => { const x = people().find(y => y.id === b.dataset.da); act({ op: 'set', id: x.id, present: !x.present }); });
+    list.querySelectorAll('[data-bz]').forEach(b => b.onclick = () => { const x = people().find(y => y.id === b.dataset.bz); const v = mainPay(x); if (v) act(Object.assign({ op: 'set', id: x.id }, v)); else payMenu(x.id); });
+    list.querySelectorAll('[data-pm]').forEach(b => b.onclick = () => payMenu(b.dataset.pm));
+    list.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => editDialog(b.dataset.edit));
+  }
+
+  function personFields(p) {
+    p = p || {};
+    return `<div class="row2"><div class="field"><label for="dfn">Vorname</label><input type="text" id="dfn" value="${esc(p.first_name || '')}"></div>
+      <div class="field"><label for="dln">Nachname</label><input type="text" id="dln" value="${esc(p.last_name || '')}"></div></div>
+      <div class="row2"><div class="field"><label for="dsc">Schule</label><select id="dsc">${(p.school && !L.SCHOOLS.includes(p.school) ? [p.school] : []).concat(L.SCHOOLS).map(s => `<option ${(p.school || 'Andere Schule / Gast') === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select></div>
+      <div class="field"><label for="dst">Stufe</label><select id="dst">${L.STAGES.map(s => `<option value="${esc(s.id)}" ${(p.stage || 'Neu') === s.id ? 'selected' : ''}>${esc(s.label || s.id)}${s.stars ? ' ' + '★'.repeat(s.stars) : ''}</option>`).join('')}</select></div></div>
+      <label class="check"><input type="checkbox" id="dph" ${p.photo_ok !== false ? 'checked' : ''}> Mit Fotos und Videos einverstanden</label>`;
+  }
+  function readFields() { return { first_name: $('dfn').value.trim(), last_name: $('dln').value.trim(), school: $('dsc').value, stage: $('dst').value, photo_ok: $('dph').checked }; }
+
+  /* ---------- Selbsteintrag (Gerät wird an die Person gegeben) ---------- */
+  function kiosk() {
+    const I = window.LGI, t = I.t, OTHER = 'Andere Schule / Gast';
+    let box = $('kioskBox');
+    if (!box) { box = document.createElement('div'); box.id = 'kioskBox'; box.className = 'kiosk'; document.body.appendChild(box); }
+    document.body.classList.add('kiosk-on');
+    const close = () => { box.remove(); document.body.classList.remove('kiosk-on'); renderTop(); renderMain(); };
+    const form = () => {
+      const langs = I.LANGS.filter(l => l.ready);
+      box.setAttribute('dir', I.RTL.includes(I.lang) ? 'rtl' : 'ltr');
+      box.innerHTML = `<div class="kwrap">
+        <div class="khead"><h2>${t('kioskTitle')}</h2>${langs.length > 1 ? `<select id="klang" aria-label="${t('langLabel')}">${langs.map(l => `<option value="${l.id}" ${l.id === I.lang ? 'selected' : ''}>${l.name}</option>`).join('')}</select>` : ''}</div>
+        <p class="muted small" style="margin:0">${t('kioskIntro')}</p>
+        <div class="row2"><div class="field"><label for="kfn">${t('firstName')}</label><input type="text" id="kfn" autocomplete="off"></div>
+        <div class="field"><label for="kln">${t('lastName')}</label><input type="text" id="kln" autocomplete="off"></div></div>
+        <fieldset class="field"><legend class="legend">${t('school')} <span class="muted small">${t('schoolHint')}</span></legend><div class="schools">${L.SCHOOLS.map(s => `<label class="opt"><input type="checkbox" name="ksc" value="${esc(s)}"><span>${esc(s === OTHER ? t('schoolOther') : s === L.SCHOOLS[5] ? t('schoolNone') : s)}</span></label>`).join('')}</div></fieldset>
+        <div class="field" id="kother" hidden><label for="kso">${t('otherSchoolName')}</label><input type="text" id="kso" maxlength="100"></div>
+        <fieldset class="field"><legend class="legend">${t('stage')}</legend><div class="stages">${L.STAGES.map(s => `<label class="opt"><input type="radio" name="kst" value="${esc(s.id)}"><span>${L.stageBadge(s.id)}</span></label>`).join('')}</div></fieldset>
+        <p class="muted small" style="margin:0">${t('photoNotice')}</p>
+        <p class="muted small" style="margin:0">${t('kioskPrivacy')}</p>
+        <p class="err" id="kerr" hidden></p>
+        <button class="btn block" id="ksend" type="button">${t('kioskSubmit')}</button>
+        <button class="btn ghost small" id="kexit" type="button">Zurück zur Liste (nur Veranstalter, Passwort)</button>
+      </div>`;
+      if ($('klang')) $('klang').onchange = e => { I.set(e.target.value); form(); };
+      box.querySelectorAll('input[name=ksc]').forEach(c => c.onchange = () => { $('kother').hidden = !box.querySelector(`input[name=ksc][value="${OTHER}"]:checked`); });
+      $('kexit').onclick = exitAsk;
+      $('ksend').onclick = () => {
+        const fn = $('kfn').value.trim(), ln = $('kln').value.trim();
+        const sch = [...box.querySelectorAll('input[name=ksc]:checked')].map(c => c.value);
+        const st = (box.querySelector('input[name=kst]:checked') || {}).value;
+        const miss = [];
+        if (!fn) miss.push(t('firstName')); if (!ln) miss.push(t('lastName')); if (!sch.length) miss.push(t('school')); if (!st) miss.push(t('stage'));
+        if (miss.length) { $('kerr').textContent = t('missing', { list: miss.join(', ') }); $('kerr').hidden = false; return; }
+        const other = $('kso').value.trim().slice(0, 100);
+        const school = L.joinSchools(sch.map(x => x === OTHER && other ? other : x)).slice(0, 300);
+        const free = st === 'Ehrenmitglied';
+        act({ op: 'add', id: L.uuid(), event_id: data.event_id, present: true, paid: false, free, reduced: false, amount: free ? 0 : null, first_name: fn.slice(0, 60), last_name: ln.slice(0, 60), school, stage: st, photo_ok: true, note: 'selbst eingetragen' });
+        box.innerHTML = `<div class="kwrap kdone"><div class="kcheck">✓</div><h2>${esc(t('kioskDone', { name: fn }))}</h2><p>${t('kioskReturn')}</p>
+          <button class="btn gold block" id="knext" type="button">${t('kioskNext')}</button>
+          <button class="btn ghost small" id="kexit" type="button">Zurück zur Liste (nur Veranstalter, Passwort)</button></div>`;
+        $('knext').onclick = form; $('kexit').onclick = exitAsk;
+      };
+    };
+    const exitAsk = () => {
+      const w = document.createElement('div'); w.className = 'kpw';
+      w.innerHTML = `<div class="kwrap"><h2>Veranstalter-Zugang</h2><div class="field"><label for="kpw">Einlass-Passwort</label><input type="password" id="kpw" autocomplete="off"></div><p class="err" id="kpwerr" hidden>Falsches Passwort.</p><div class="row"><button class="btn ghost" id="kpwc" type="button">Abbrechen</button><button class="btn" id="kpwok" type="button">Zur Liste</button></div></div>`;
+      box.appendChild(w); $('kpw').focus();
+      const ok = () => { if ($('kpw').value === key) { I.set('de'); close(); } else { $('kpwerr').hidden = false; } };
+      $('kpwok').onclick = ok; $('kpw').onkeydown = e => { if (e.key === 'Enter') ok(); }; $('kpwc').onclick = () => w.remove();
+    };
+    form(); window.scrollTo(0, 0);
+  }
+
+  function addDialog(prefillName) {
+    const parts = (prefillName || '').trim().split(/\s+/);
+    openDialog(`<h2>Person ohne Voranmeldung</h2>${personFields({ first_name: parts.length > 1 ? parts.slice(0, -1).join(' ') : parts[0] || '', last_name: parts.length > 1 ? parts[parts.length - 1] : '', photo_ok: true })}
+      <div class="field"><label for="dpay">Bezahlung</label><select id="dpay"><option value="offen">noch offen</option><option value="bez">bezahlt${prices().regular != null ? ' (' + eur(prices().regular) + ')' : ''}</option><option value="erm">ermäßigt${prices().reduced != null ? ' (' + eur(prices().reduced) + ')' : ''}</option><option value="frei">frei (z. B. Ehrenmitglied, eingeladener Gast)</option></select></div>
+      <p class="err" id="derr" hidden></p>
+      <div class="row"><button class="btn ghost" id="dc" type="button">Abbrechen</button><button class="btn" id="dok" type="button">Eintragen und abhaken</button></div>`);
+    $('dc').onclick = closeDialog;
+    $('dst').onchange = () => { if ($('dst').value === 'Ehrenmitglied' && $('dpay').value === 'offen') $('dpay').value = 'frei'; };
+    $('dok').onclick = () => {
+      const f = readFields();
+      if (!f.first_name || !f.last_name) { $('derr').textContent = 'Bitte Vor- und Nachnamen eintragen.'; $('derr').hidden = false; return; }
+      const pv = $('dpay').value === 'offen' && f.stage === 'Ehrenmitglied' ? 'frei' : $('dpay').value, pr = prices();
+      const pay = { offen: { paid: false, free: false, reduced: false, amount: null }, bez: { paid: true, free: false, reduced: false, amount: pr.regular ?? null }, erm: { paid: true, free: false, reduced: true, amount: pr.reduced ?? null }, frei: { paid: false, free: true, reduced: false, amount: 0 } }[pv];
+      act(Object.assign({ op: 'add', id: L.uuid(), event_id: data.event_id, present: true }, pay, f));
+      search = ''; const q = $('q'); if (q) q.value = '';
+      closeDialog(); renderList();
+    };
+    setTimeout(() => $('dfn').focus(), 50);
+  }
+
+  function editDialog(id, sure) {
+    const p = people().find(x => x.id === id); if (!p) return;
+    openDialog(`<h2>${esc(p.first_name)} ${esc(p.last_name)}</h2>
+      <p class="muted small" style="margin:0">Code ${esc(p.ticket)} · ${p.source === 'vor_ort' ? 'vor Ort eingetragen' : 'vorangemeldet'}${p.present_at ? ' · da seit ' + new Date(p.present_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr' : ''}</p>
+      ${personFields(p)}
+      <div class="row" style="justify-content:space-between"><button class="btn ghost small" id="ddel" type="button">${sure ? 'Wirklich entfernen?' : 'Entfernen'}</button>
+      <span class="row"><button class="btn ghost" id="dc" type="button">Abbrechen</button><button class="btn" id="dok" type="button">Speichern</button></span></div>`);
+    $('dc').onclick = closeDialog;
+    $('ddel').onclick = () => { if (!sure) return editDialog(id, true); act({ op: 'delete', id }); closeDialog(); };
+    $('dok').onclick = () => {
+      const f = readFields(); const ch = { op: 'set', id };
+      if (f.stage === 'Ehrenmitglied' && p.stage !== 'Ehrenmitglied' && payState(p) === 'offen') Object.assign(ch, { free: true, paid: false, reduced: false, amount: 0 });
+      for (const k of Object.keys(f)) if (f[k] !== p[k] && !(typeof f[k] === 'string' && !f[k])) ch[k] = f[k];
+      if (Object.keys(ch).length > 2) act(ch);
+      closeDialog();
+    };
+  }
+
+  function handleTicket(t) {
+    pendingTicket = null;
+    history.replaceState(null, '', location.pathname);
+    const code = (t.match(/SM-[A-Z0-9]{6}/) || [t])[0];
+    const p = people().find(x => (x.ticket || '').toUpperCase() === code);
+    tab = 'einlass'; renderTop(); renderMain();
+    if (!p) {
+      openDialog(`<div class="welcome"><div class="big">Code ${esc(code)} nicht gefunden</div>
+        <p class="muted">Vermutlich hat sich die Person erst angemeldet, als dieses Gerät kein Netz hatte. Bitte nach dem Namen suchen oder als Gast eintragen.</p></div>
+        <div class="row"><button class="btn ghost" id="dc" type="button">Schließen</button><button class="btn gold" id="dadd" type="button">Als Gast eintragen</button></div>`);
+      $('dc').onclick = closeDialog; $('dadd').onclick = () => addDialog();
+      return;
+    }
+    const was = p.present;
+    if (!was) act({ op: 'set', id: p.id, present: true });
+    welcome(p.id, was);
+  }
+  function welcome(id, was) {
+    const p = people().find(x => x.id === id);
+    openDialog(`<div class="welcome"><div class="ok">✓</div><div class="big">${esc(p.first_name)} ${esc(p.last_name)}</div>
+      <div>${L.stageBadge(p.stage)} · <span class="muted">${esc(p.school)}</span></div>
+      ${p.photo_ok ? '' : '<div><span class="tag nofoto">kein Foto / Video</span></div>'}
+      ${was ? '<p class="muted small" style="margin:0">War schon als „da“ abgehakt.</p>' : ''}
+      <div class="paygrp"><button class="tog bz bigtog ${payClass(p)}" id="wpaid" type="button">${payState(p) === 'offen' ? 'Bezahlt?' : payLabel(p)}</button><button class="tog more bigtog" id="wpm" type="button" aria-label="Weitere Zahlungsoptionen">⋯</button></div></div>
+      <div class="row"><button class="btn block" id="dc" type="button">Fertig</button></div>`);
+    $('wpaid').onclick = () => { const v = mainPay(people().find(x => x.id === id)); if (v) { act(Object.assign({ op: 'set', id }, v)); welcome(id, true); } else payMenu(id, () => welcome(id, true)); };
+    $('wpm').onclick = () => payMenu(id, () => welcome(id, true));
+    $('dc').onclick = closeDialog;
+  }
+  window.addEventListener('hashchange', () => { const h = location.hash.replace('#', '').toUpperCase(); if (h && key && data) handleTicket(h); });
+
+  /* ---------- Scannen (wo der Browser es kann) ---------- */
+  let stream = null, scanLoop = null;
+  function stopScan() { if (scanLoop) clearInterval(scanLoop); scanLoop = null; if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; }
+  async function scanDialog() {
+    openDialog(`<h2>QR-Code scannen</h2><video id="vid" playsinline muted></video><p class="muted small" id="smsg">Kamera wird gestartet …</p><div class="row"><button class="btn ghost" id="dc" type="button">Schließen</button></div>`);
+    $('dc').onclick = closeDialog;
+    try {
+      const det = new BarcodeDetector({ formats: ['qr_code'] });
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      const v = $('vid'); v.srcObject = stream; await v.play(); $('smsg').textContent = 'QR-Code in das Bild halten.';
+      scanLoop = setInterval(async () => {
+        try {
+          const r = await det.detect(v);
+          const hit = r.map(x => (x.rawValue || '').toUpperCase().match(/SM-[A-Z0-9]{6}/)).find(Boolean);
+          if (hit) { stopScan(); handleTicket(hit[0]); }
+        } catch (e) {}
+      }, 300);
+    } catch (e) { $('smsg').textContent = 'Die Kamera konnte nicht gestartet werden. Bitte nach dem Namen suchen.'; }
+  }
+
+  /* ---------- Übersicht ---------- */
+  function feeKey() { return 'lg_fee_' + (data && data.event_id || 'x'); }
+  function feeText() { return L.store(feeKey()) || ''; }
+  function sumText(c) { const f = parseFloat(String(feeText()).replace(',', '.')); return isFinite(f) && f > 0 ? (c.paid * f).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' }) + ` <span class="muted small">(${c.paid} × ${f.toLocaleString('de-DE')} €)</span>` : '–'; }
+  const ovOpen = {};
+  function cashKey(k) { return 'lg_cash_' + k + '_' + ((data && data.event_id) || 'x'); }
+  function renderOverview(m) {
+    renderOverview0(m);
+    ['cstart', 'ccount'].forEach(id => { const el = $(id); if (el) el.onchange = () => { L.store(cashKey(id === 'cstart' ? 'start' : 'count'), el.value); ovOpen['Kasse'] = true; renderOverview(m); }; });
+    const c = counts(), k = cash();
+    const sums = { 'Stand': `${c.da} von ${c.all} da`, 'Kasse': isFinite(k.sum) ? 'erfasst ' + eur(Math.round(k.sum * 100) / 100) : '', 'Nach Stufe': '', 'Nach Schule': '' };
+    m.querySelectorAll(':scope > .card').forEach(card => {
+      const h = card.querySelector('h2'); if (!h) return;
+      const title = h.textContent.trim(), key0 = title.split(' (')[0];
+      const d = document.createElement('details'); d.className = card.className;
+      if (ovOpen[key0]) d.open = true;
+      d.ontoggle = () => { ovOpen[key0] = d.open; };
+      const sm = document.createElement('summary'); h.remove(); sm.appendChild(h);
+      const extra = sums[key0]; if (extra) { const sp = document.createElement('span'); sp.className = 'sum'; sp.textContent = extra; sm.appendChild(sp); }
+      d.appendChild(sm); while (card.firstChild) d.appendChild(card.firstChild); card.replaceWith(d);
+    });
+  }
+  function renderOverview0(m) {
+    const p = people(), c = counts();
+    const byStage = L.STAGES.map(s => ({ s: s.id, n: p.filter(x => x.stage === s.id).length, d: p.filter(x => x.stage === s.id && x.present).length })).filter(x => x.n);
+    // Mehrere Schulen je Person: jede Person zählt bei jeder ihrer Schulen; freie Schulnamen erscheinen einzeln
+    const allS = []; p.forEach(x => L.splitSchools(x.school).forEach(s => { if (!allS.includes(s)) allS.push(s); }));
+    allS.sort((a, b) => (L.SCHOOLS.indexOf(a) + 1 || 99) - (L.SCHOOLS.indexOf(b) + 1 || 99) || a.localeCompare(b, 'de'));
+    const bySchool = allS.map(s => ({ s, n: p.filter(x => L.splitSchools(x.school).includes(s)).length, d: p.filter(x => x.present && L.splitSchools(x.school).includes(s)).length })).filter(x => x.n);
+    const nofoto = p.filter(x => !x.photo_ok);
+    m.innerHTML = `<div class="card"><h2>Stand</h2>
+        <div class="table-wrap"><table><tbody>
+        <tr><td>Angemeldet gesamt</td><td class="n"><b>${c.all}</b></td></tr>
+        <tr><td>davon vorab angemeldet</td><td class="n">${p.filter(x => x.source === 'vorab').length}</td></tr>
+        <tr><td>vor Ort eingetragen</td><td class="n">${p.filter(x => x.source === 'vor_ort').length}</td></tr>
+        <tr><td>Da</td><td class="n"><b>${c.da}</b></td></tr>
+        <tr><td>Bezahlt</td><td class="n">${c.paid}</td></tr>
+        <tr><td>Frei (z. B. Ehrenmitglieder)</td><td class="n">${c.free}</td></tr>
+        <tr><td>Da, aber nicht bezahlt</td><td class="n">${c.open}</td></tr>
+        </tbody></table></div></div>
+      <div class="card"><h2>Kasse</h2>${(() => { const k = cash(), pr = prices(); const num = v => { v = String(v || '').trim().replace(',', '.'); return v === '' ? null : +v; };
+        const start = num(L.store(cashKey('start'))), counted = num(L.store(cashKey('count')));
+        const soll = isFinite(k.sum) ? Math.round(((start || 0) + k.sum) * 100) / 100 : NaN;
+        const diff = counted != null && isFinite(soll) ? Math.round((counted - soll) * 100) / 100 : null;
+        return `<div class="table-wrap"><table><tbody>
+        <tr><td>Bezahlt regulär${pr.regular != null ? ' (' + eur(pr.regular) + ')' : ''}</td><td class="n">${k.reg}</td></tr>
+        <tr><td>Ermäßigt${pr.reduced != null ? ' (' + eur(pr.reduced) + ')' : ''}</td><td class="n">${k.red}</td></tr>
+        <tr><td>Frei (Ehrenmitglieder, eingeladene Gäste)</td><td class="n">${k.free}</td></tr>
+        <tr><td><b>Erfasste Barzahlungen</b></td><td class="n"><b>${isFinite(k.sum) ? eur(Math.round(k.sum * 100) / 100) : 'Preise fehlen'}</b></td></tr></tbody></table></div>
+        <div class="row2"><div class="field"><label for="cstart">Wechselgeld zu Beginn (€)</label><input type="text" inputmode="decimal" id="cstart" value="${esc(L.store(cashKey('start')) || '')}" placeholder="z. B. 50"></div>
+        <div class="field"><label for="ccount">Gezählter Kassenbestand (€)</label><input type="text" inputmode="decimal" id="ccount" value="${esc(L.store(cashKey('count')) || '')}" placeholder="beim Kassenabschluss"></div></div>
+        <div class="cashres">Soll in der Kasse: <b>${isFinite(soll) ? eur(soll) : '–'}</b>${diff != null ? ` · Differenz: <b class="${diff === 0 ? 'ok' : 'bad'}">${diff > 0 ? '+' : ''}${eur(diff)}</b>` : ''}</div>
+        <p class="muted small" style="margin:0">„Frei“ zählt nicht mit. Wechselgeld und gezählter Bestand werden nur auf diesem Gerät gespeichert. Preise festlegen: Reiter „Einlass“ › ganz unten.</p>`; })()}</div>
+      <div class="card"><h2>Nach Stufe</h2><div class="table-wrap"><table><thead><tr><th>Stufe</th><th class="n">angemeldet</th><th class="n">da</th></tr></thead><tbody>
+        ${byStage.map(x => `<tr><td>${L.stageBadge(x.s)}</td><td class="n">${x.n}</td><td class="n">${x.d}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">Noch keine Daten</td></tr>'}</tbody></table></div></div>
+      <div class="card"><h2>Nach Schule</h2><div class="table-wrap"><table><thead><tr><th>Schule</th><th class="n">angemeldet</th><th class="n">da</th></tr></thead><tbody>
+        ${bySchool.map(x => `<tr><td>${esc(x.s)}</td><td class="n">${x.n}</td><td class="n">${x.d}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">Noch keine Daten</td></tr>'}</tbody></table></div></div>
+      <div class="card"><h2>Bitte nicht fotografieren oder filmen (${nofoto.length})</h2>
+        ${nofoto.length ? '<ul style="margin:0;padding-left:20px">' + nofoto.map(x => `<li>${esc(x.first_name)} ${esc(x.last_name)} <span class="muted small">${x.present ? '· da' : '· noch nicht da'}</span></li>`).join('') + '</ul>' : '<p class="muted" style="margin:0">Alle sind mit Fotos und Videos einverstanden.</p>'}</div>
+      <div class="card"><h2>Exportieren und drucken</h2>
+        <div class="tools2"><button class="btn ghost small" id="csv" type="button">Liste als Tabelle (CSV)</button><button class="btn ghost small" id="prl" type="button">Papierliste drucken</button><button class="btn ghost small" id="nsave" type="button">Notfall-Sicherung (Stand dieses Geräts)</button></div>
+        <p class="muted small" style="margin:0">Tipp: Papierliste am Vorabend drucken und als Rückfallebene mitnehmen.</p></div>
+      <div class="printing print-only" id="plist"></div>`;
+    $('csv').onclick = exportCsv;
+    $('nsave').onclick = () => exportCsv(true);
+    $('prl').onclick = () => {
+      const e = event();
+      $('plist').innerHTML = `<h2 style="color:#000">${esc(e ? e.title : '')} · ${esc(e ? L.fmtDate(e.event_date) : '')}</h2><table class="plist"><thead><tr><th>Name</th><th>Schule</th><th>Stufe</th><th>Foto</th><th>Da</th><th>Bezahlt</th></tr></thead><tbody>
+        ${p.map(x => `<tr><td>${esc(x.last_name)}, ${esc(x.first_name)}</td><td>${esc(x.school)}</td><td>${esc(x.stage)}</td><td>${x.photo_ok ? 'ja' : 'NEIN'}</td><td>${x.present ? '✓' : '<span class="box"></span>'}</td><td>${x.free ? 'frei' : x.paid ? '✓' : '<span class="box"></span>'}</td></tr>`).join('')}
+        ${Array.from({ length: 15 }, () => '<tr><td>&nbsp;</td><td></td><td></td><td></td><td><span class="box"></span></td><td><span class="box"></span></td></tr>').join('')}</tbody></table>`;
+      window.print();
+    };
+  }
+  function exportCsv(emergency) {
+    const e = event();
+    const rows = [['Nachname', 'Vorname', 'Schule', 'Stufe', 'Fotos ok', 'Da', 'Da seit', 'Bezahlt', 'Angemeldet', 'Code']];
+    people().forEach(x => rows.push([x.last_name, x.first_name, x.school, x.stage, x.photo_ok ? 'ja' : 'nein', x.present ? 'ja' : 'nein', x.present_at ? new Date(x.present_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '', payText(x), x.source === 'vorab' ? 'vorab' : 'vor Ort', x.ticket]));
+    const csv = '﻿' + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\r\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const ts = new Date().toLocaleString('de-DE').replace(/[^0-9]+/g, '-').replace(/-$/, '');
+    a.download = (emergency ? 'Notfall-Sicherung_' + ts + (queue.length ? '_' + queue.length + '-ungesendet' : '') : 'Teilnehmer_' + ((e && e.event_date) || 'Lehrgang')) + '.csv'; document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  /* ---------- Plakat ---------- */
+  function renderPoster(m) {
+    const e = event(); const url = new URL('./', location.href).toString();
+    const parts = ((e && e.location) || '').split(',');
+    m.innerHTML = `<div class="card"><h2>Plakat mit QR-Code zur Voranmeldung</h2><p class="muted small" style="margin:0">Zum Ausdrucken, als Bild für WhatsApp (Screenshot) oder zum Aufhängen am Eingang für spontane Gäste mit Netz.</p>
+      <div class="tools2"><button class="btn small" id="prp" type="button">Plakat drucken</button><button class="btn ghost small" id="cpy" type="button">Link kopieren</button></div></div>
+      <div class="poster printing">
+        <div style="font-size:13px;letter-spacing:.3em;text-transform:uppercase;font-weight:700">Slowmotion · Selbstverteidigung</div>
+        <div class="p-title">${esc(e ? e.title.replace(/^Selbstverteidigung\s*–\s*/, '') : 'Lehrgang')}</div>
+        <div style="font-weight:800">${esc(e ? L.fmtDate(e.event_date) : '')}${e && e.time_text ? ' · ' + esc(e.time_text) : ''}</div>
+        <div style="font-size:14px">${parts.map(s => esc(s.trim())).join('<br>')}</div>
+        <div class="p-qr">${window.makeQrSvg(url, { level: 'M', border: 2 })}</div>
+        <div style="font-size:22px;font-weight:900">Jetzt voranmelden</div>
+        <div style="font-size:14px;max-width:420px">QR-Code scannen, Name und Stufe eintragen, persönlichen Code aufs Handy. Am Eingang nur noch vorzeigen.</div>
+        <div class="p-url">${esc(url)}</div>
+      </div>`;
+    $('prp').onclick = () => window.print();
+    $('cpy').onclick = async () => { try { await navigator.clipboard.writeText(url); $('cpy').textContent = 'Kopiert'; } catch (e) { prompt('Link:', url); } };
+  }
+
+  /* ---------- Lehrgänge ---------- */
+  function renderEvents(m, editId) {
+    const evs = (data && data.events) || [];
+    const ed = evs.find(x => x.id === editId) || {};
+    m.innerHTML = `<div class="card"><h2>Lehrgänge</h2>
+      <div class="table-wrap"><table><thead><tr><th>Datum</th><th>Titel</th><th></th></tr></thead><tbody>
+      ${evs.map(x => `<tr><td>${esc(x.event_date || '–')}</td><td>${esc(x.title)} ${x.active ? '<span class="tag" style="color:var(--ok)">Voranmeldung offen</span>' : ''} ${x.id === data.event_id ? '<span class="tag">hier angezeigt</span>' : ''}</td>
+        <td class="n"><button class="btn ghost small" data-show="${x.id}" type="button">Anzeigen</button> <button class="btn ghost small" data-ed="${x.id}" type="button">Bearbeiten</button></td></tr>`).join('')}
+      </tbody></table></div></div>
+      <form class="card" id="evf"><h2>${ed.id ? 'Lehrgang bearbeiten' : 'Neuen Lehrgang anlegen'}</h2>
+        <div class="field"><label for="et">Titel</label><input type="text" id="et" value="${esc(ed.title || '')}" placeholder="z. B. Prüfungslehrgang"></div>
+        <div class="row2"><div class="field"><label for="ed">Datum</label><input type="date" id="ed" value="${esc(ed.event_date || '')}"></div>
+        <div class="field"><label for="eti">Uhrzeit</label><input type="text" id="eti" value="${esc(ed.time_text || '')}" placeholder="13:30–17:00 Uhr"></div></div>
+        <div class="field"><label for="el">Ort (Halle, Straße, Ort mit Kommas getrennt)</label><input type="text" id="el" value="${esc(ed.location || '')}"></div>
+        <label class="check"><input type="checkbox" id="ea" ${ed.active ? 'checked' : ''}> Für diesen Lehrgang ist die Voranmeldung offen (nur einer gleichzeitig)</label>
+        <p class="err" id="eerr" hidden></p>
+        <div class="row" style="display:flex;gap:8px;justify-content:flex-end">${ed.id ? '<button class="btn ghost" id="enew" type="button">Neu statt bearbeiten</button>' : ''}<button class="btn" type="submit">Speichern</button></div>
+        <p class="muted small" style="margin:0">Braucht Internet.</p></form>`;
+    m.querySelectorAll('[data-show]').forEach(b => b.onclick = async () => { eventId = b.dataset.show; L.store('lg_event', eventId); if (queue.length) await sync(); try { data = await api.adminData(key, eventId); saveLocal(); markSynced(); } catch (e) {} tab = 'einlass'; renderTop(); renderMain(); });
+    m.querySelectorAll('[data-ed]').forEach(b => b.onclick = () => renderEvents(m, b.dataset.ed));
+    if ($('enew')) $('enew').onclick = () => renderEvents(m);
+    $('evf').onsubmit = async ev => {
+      ev.preventDefault();
+      const e = { id: ed.id || '', title: $('et').value.trim(), event_date: $('ed').value, time_text: $('eti').value.trim(), location: $('el').value.trim(), active: $('ea').checked };
+      if (!e.title) { $('eerr').textContent = 'Bitte einen Titel eintragen.'; $('eerr').hidden = false; return; }
+      try { const d = await api.adminSaveEvent(key, e); data = d; eventId = d.event_id; L.store('lg_event', eventId); saveLocal(); markSynced(); renderTop(); renderEvents(m); }
+      catch (x) { $('eerr').textContent = x.code === 'network' ? 'Keine Verbindung. Lehrgänge lassen sich nur mit Internet anlegen.' : 'Speichern hat nicht geklappt.'; $('eerr').hidden = false; }
+    };
+  }
+
+  /* ---------- Start ---------- */
+  if (!key) showLogin();
+  else if (!data) { showLogin(); }
+  else start();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0d0b0c">
+<meta property="og:title" content="Slowmotion – Offener Lehrgang: Voranmeldung">
+<meta property="og:description" content="Voranmeldung freiwillig – Teilnahme auch ohne Anmeldung möglich. 14.11.2026, Bernau.">
+<title>Slowmotion Lehrgang – Voranmeldung</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar" id="topbar"></div>
+  <header class="hero">
+    <div class="shield" id="shield"></div>
+    <div class="kicker" data-t="kicker"></div>
+    <h1 class="title" data-t="title"></h1>
+    <div class="lead-band"><span class="by" data-t="by"></span><span class="names">Robert Pausch &amp; Viktor Schott</span></div>
+    <div class="facts" id="facts" hidden>
+      <div class="fact">
+        <a class="factlink" id="placeLink" target="_blank" rel="noopener"><div class="lbl" data-t="place"></div><div class="big" id="fPlace"></div><div class="muted small" id="fAddr"></div></a>
+        <div class="chips"><a class="chip" id="apple" target="_blank" rel="noopener"></a><a class="chip" id="gmaps" target="_blank" rel="noopener"></a></div>
+      </div>
+      <div class="fact when">
+        <a class="factlink" id="dateLink" download="slowmotion-lehrgang.ics"><div class="lbl" data-t="when"></div><div class="big" id="fDate"></div><div class="time" id="fTime"></div><div class="muted small" id="fDay"></div></a>
+        <div class="chips"><a class="chip" id="icsBtn" download="slowmotion-lehrgang.ics"></a><a class="chip" id="gcal" target="_blank" rel="noopener"></a></div>
+      </div>
+    </div>
+  </header>
+  <div class="demo" id="demoNote" data-t="demo" hidden></div>
+  <main id="main"><div class="card"><p class="muted" data-t="loading"></p></div></main>
+  <footer>Slowmotion Kampfsystem · <span id="fWeb">www.slowmotion-kampfsystem.de</span></footer>
+</div>
+
+<script src="config.js"></script>
+<script src="lang.js"></script>
+<script src="lib/qrcode.js"></script>
+<script src="common.js"></script>
+<script>
+(function () {
+  const L = window.LG, I = window.LGI, t = I.t, api = L.api, esc = L.esc;
+  const $ = id => document.getElementById(id);
+  const main = $('main');
+  let event = null, view = null;
+  $('shield').innerHTML = L.SHIELD;
+  if (!L.online) $('demoNote').hidden = false;
+  L.registerSW();
+
+  function bar() {
+    $('topbar').innerHTML = I.picker();
+    const sel = $('langSel');
+    if (sel) sel.onchange = () => { I.set(sel.value); bar(); facts(); if (view) view(); };
+  }
+  function schoolLabel(v) {
+    return L.splitSchools(v).map(s => s === 'Andere Schule / Gast' ? t('otherSchool') : s === L.SCHOOLS[5] ? t('schoolNone') : s).join(L.SCHOOL_SEP);
+  }
+  const OTHER = 'Andere Schule / Gast';
+  function clientId() { let c = L.store('lg_client'); if (!c) { c = L.uuid(); L.store('lg_client', c); } return c; }
+  function savedKey() { return 'lg_ticket_' + (event ? event.id : 'x'); }
+  function listKey() { return 'lg_tickets_' + (event ? event.id : 'x'); }
+  // Mehrere Personen je Gerät: jede Person hat ihre eigene Kennung (client)
+  function tickets() {
+    let list = L.storeJson(listKey());
+    if (!Array.isArray(list)) {
+      const old = L.storeJson(savedKey());
+      list = old ? [Object.assign({ client: clientId() }, old)] : [];
+      L.storeJson(listKey(), list);
+    }
+    return list;
+  }
+  function saveTickets(list) { L.storeJson(listKey(), list); }
+
+  // Uhrzeit in Berlin -> UTC (für Kalender), unabhängig von der Zeitzone des Handys
+  function berlinUtc(y, m, d, h, mi) {
+    const guess = Date.UTC(y, m - 1, d, h, mi);
+    const f = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const pr = Object.fromEntries(f.formatToParts(new Date(guess)).map(x => [x.type, x.value]));
+    const shown = Date.UTC(+pr.year, +pr.month - 1, +pr.day, +pr.hour % 24, +pr.minute);
+    return new Date(guess - (shown - guess));
+  }
+  function stamp(dt) { return dt.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); }
+  function times() {
+    if (!event.event_date) return null;
+    const [y, m, d] = event.event_date.split('-').map(Number);
+    const mt = String(event.time_text || '').match(/(\d{1,2})[:.](\d{2})\D+(\d{1,2})[:.](\d{2})/);
+    const start = mt ? berlinUtc(y, m, d, +mt[1], +mt[2]) : berlinUtc(y, m, d, 10, 0);
+    const end = mt ? berlinUtc(y, m, d, +mt[3], +mt[4]) : new Date(start.getTime() + 3 * 3600e3);
+    return { start, end };
+  }
+  function icsText(tm) {
+    const e = s => String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+    return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Slowmotion Lehrgang//DE', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'BEGIN:VEVENT',
+      'UID:' + event.id + '@slowmotion-lehrgang', 'DTSTAMP:' + stamp(new Date()), 'DTSTART:' + stamp(tm.start), 'DTEND:' + stamp(tm.end),
+      'SUMMARY:' + e(t('calTitle')), 'LOCATION:' + e(event.location || ''), 'DESCRIPTION:' + e(t('calDetails') + ' ' + location.href.split('#')[0]),
+      'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+  }
+  function facts() {
+    if (!event) return;
+    const parts = (event.location || '').split(',');
+    $('fPlace').textContent = parts[0] || '';
+    $('fAddr').innerHTML = parts.slice(1).map(s => esc(s.trim())).join('<br>');
+    const q = encodeURIComponent(event.location || '');
+    const apple = 'https://maps.apple.com/?q=' + q, google = 'https://www.google.com/maps/search/?api=1&query=' + q;
+    const isApple = /iPhone|iPad|Macintosh/.test(navigator.userAgent);
+    $('placeLink').href = isApple ? apple : google; $('placeLink').title = t('tapPlace');
+    $('apple').href = apple; $('apple').textContent = t('appleMaps');
+    $('gmaps').href = google; $('gmaps').textContent = t('googleMaps');
+    const d = event.event_date ? new Date(event.event_date + 'T12:00') : null;
+    $('fDate').textContent = d ? d.toLocaleDateString(I.locale(), { day: '2-digit', month: '2-digit', year: '2-digit' }) : '';
+    $('fDay').textContent = d ? d.toLocaleDateString(I.locale(), { weekday: 'long' }) : '';
+    $('fTime').textContent = event.time_text || '';
+    const tm = times();
+    if (tm) {
+      const ics = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(icsText(tm));
+      $('dateLink').href = ics; $('dateLink').title = t('tapDate');
+      $('icsBtn').href = ics; $('icsBtn').textContent = t('addCal');
+      $('gcal').href = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(t('calTitle')) +
+        '&dates=' + stamp(tm.start) + '/' + stamp(tm.end) + '&location=' + q + '&details=' + encodeURIComponent(t('calDetails')) + '&ctz=Europe/Berlin';
+      $('gcal').textContent = t('googleCal');
+    }
+    $('facts').hidden = false;
+  }
+
+  async function load() {
+    view = null;
+    try { event = await api.publicEvent(); }
+    catch (e) {
+      main.innerHTML = `<div class="card"><h2>${t('offlineTitle')}</h2><p class="muted">${t('offlineText')}</p><div><button class="btn" id="retry">${t('reload')}</button></div></div>`;
+      $('retry').onclick = load; return;
+    }
+    if (!event) { main.innerHTML = `<div class="card"><h2>${t('closedTitle')}</h2><p class="muted">${t('closedText')}</p></div>`; return; }
+    facts();
+    const list = tickets();
+    list.length ? showTickets(list) : showForm();
+  }
+
+  function readForm() {
+    const f = $('f'); if (!f) return null;
+    return {
+      first_name: $('fn').value, last_name: $('ln').value, schools: checkedSchools(), school_free: $('so') ? $('so').value : '',
+      stage: (document.querySelector('input[name=stage]:checked') || {}).value,
+      photo_ok: p.photo_ok
+    };
+  }
+
+  function showForm(prefill, client) {
+    const p = prefill || {};
+    const cid = client || p.client || L.uuid();
+    view = () => showForm(Object.assign(readForm() || p, { client: cid }), cid);
+    const hasTickets = tickets().length > 0;
+    const stages = L.STAGES.map(s => `<label class="opt"><input type="radio" name="stage" value="${esc(s.id)}" ${p.stage === s.id ? 'checked' : ''} required><span>${L.stageBadge(s.id)}</span></label>`).join('');
+    const parts = p.schools || L.splitSchools(p.school);
+    const unknown = parts.filter(x => !L.SCHOOLS.includes(x));
+    const picked = parts.filter(x => L.SCHOOLS.includes(x));
+    if (unknown.length && !picked.includes(OTHER)) picked.push(OTHER);
+    const freeSchool = p.school_free != null ? p.school_free : unknown.join(', ');
+    const schools = L.SCHOOLS.map(s => `<label class="opt"><input type="checkbox" name="school" value="${esc(s)}" ${picked.includes(s) ? 'checked' : ''}><span>${esc(s === OTHER ? t('schoolOther') : s === L.SCHOOLS[5] ? t('schoolNone') : s)}</span></label>`).join('');
+    main.innerHTML = `<form class="card" id="f" novalidate>
+      <div><h2>${t('formTitle')}</h2><p class="muted small" style="margin:4px 0 0">${t('formIntro')}</p></div>
+      <div class="row2">
+        <div class="field"><label for="fn">${t('firstName')}</label><input type="text" id="fn" autocomplete="given-name" value="${esc(p.first_name || '')}" required maxlength="60"></div>
+        <div class="field"><label for="ln">${t('lastName')}</label><input type="text" id="ln" autocomplete="family-name" value="${esc(p.last_name || '')}" required maxlength="60"></div>
+      </div>
+      <fieldset class="field" id="fsc"><legend class="legend">${t('school')} <span class="muted small">${t('schoolHint')}</span></legend><div class="schools">${schools}</div></fieldset>
+      <div class="field" id="otherBox" ${picked.includes(OTHER) ? '' : 'hidden'}><label for="so">${t('otherSchoolName')}</label><input type="text" id="so" maxlength="80" value="${esc(freeSchool)}" autocomplete="organization"><span class="muted small">${t('otherSchoolHint')}</span></div>
+      <fieldset id="fst"><legend class="legend">${t('stage')}</legend><div class="stages">${stages}</div></fieldset>
+      <details class="privacy"><summary>${t('privacySummary')}</summary>
+        <p>${t('privacyText')}</p>
+        <p>${t('organizer')}</p>
+        ${t('translationNote') ? `<p><i>${t('translationNote')}</i></p>` : ''}
+      </details>
+      <p class="muted small photoline">${t('photoNotice')}</p>
+      <label class="check"><input type="checkbox" id="ok"> ${t('confirm')}</label>
+      <p class="err" id="err" hidden></p>
+      <button class="btn block" type="submit" id="send">${t('submit')}</button>
+      ${hasTickets ? `<button class="btn ghost block" type="button" id="back">${t('backToTickets')}</button>` : ''}
+    </form>`;
+    $('f').dataset.client = cid;
+    $('f').onsubmit = submit;
+    if ($('back')) $('back').onclick = () => showTickets(tickets());
+    main.querySelectorAll('input[name=school]').forEach(c => c.onchange = () => { $('otherBox').hidden = !checkedSchools().includes(OTHER); markOk(); });
+    $('f').addEventListener('input', markOk); $('f').addEventListener('change', markOk);
+  }
+  // Fehlende Angaben rot markieren; Markierung verschwindet, sobald ausgefüllt
+  function markOk() {
+    const f = $('f'); if (!f || !f.dataset.tried) return;
+    flag($('fn').closest('.field'), !$('fn').value.trim());
+    flag($('ln').closest('.field'), !$('ln').value.trim());
+    flag($('fsc'), !checkedSchools().length);
+    flag($('fst'), !document.querySelector('input[name=stage]:checked'));
+    flag($('ok').closest('.check'), !$('ok').checked);
+  }
+  function checkedSchools() { return [...document.querySelectorAll('input[name=school]:checked')].map(c => c.value); }
+  function flag(el, bad) { if (el) el.classList.toggle('missing', !!bad); }
+
+  async function submit(ev) {
+    ev.preventDefault();
+    const err = $('err'); err.hidden = true;
+    $('f').dataset.tried = '1'; markOk();
+    const chosen = checkedSchools();
+    const other = chosen.includes(OTHER) ? $('so').value.trim().slice(0, 100) : '';
+    const f = {
+      first_name: $('fn').value.trim(), last_name: $('ln').value.trim(), school: L.joinSchools(chosen.map(x => x === OTHER && other ? other : x)).slice(0, 300),
+      stage: (document.querySelector('input[name=stage]:checked') || {}).value
+    };
+    const missing = [];
+    if (!f.first_name) missing.push(t('firstName')); if (!f.last_name) missing.push(t('lastName'));
+    if (!f.school) missing.push(t('school')); if (!f.stage) missing.push(t('stage'));
+    const firstBad = () => { const el = document.querySelector('#f .missing'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+    if (missing.length) { err.textContent = t('missing', { list: missing.join(', ') }); err.hidden = false; firstBad(); return; }
+    if (!$('ok').checked) { err.textContent = t('confirmMissing'); err.hidden = false; firstBad(); return; }
+    // Foto-Widerspruch nur noch mündlich am Einlass (Beschluss 20.10.2026, 10:26); bestehenden Wert beim Ändern behalten
+    const prev = tickets().find(x => x.client === $('f').dataset.client);
+    f.photo_ok = prev && prev.photo_ok === false ? false : true;
+    $('send').disabled = true; $('send').textContent = t('sending');
+    try {
+      const cid = $('f').dataset.client;
+      const r = await api.register(cid, f);
+      const tk = { client: cid, ticket: r.ticket, first_name: f.first_name, last_name: f.last_name, school: f.school, stage: f.stage, photo_ok: f.photo_ok };
+      const list = tickets().filter(x => x.client !== cid); list.push(tk); saveTickets(list);
+      showTickets(list, tk.ticket);
+      window.scrollTo(0, 0);
+    } catch (e) {
+      err.textContent = e.code === 'network' ? t('errNetwork') : t('errOther');
+      err.hidden = false; $('send').disabled = false; $('send').textContent = t('submit');
+    }
+  }
+
+  // QR-Code als Bild speichern/teilen (für alle, die keinen Screenshot machen können)
+  async function ticketBlob(tk) {
+    const url = new URL('einlass.html', location.href); url.hash = tk.ticket;
+    const img = new Image();
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(window.makeQrSvg(url.toString(), { level: 'M', border: 2 }));
+    await (img.decode ? img.decode() : new Promise(r => { img.onload = r; }));
+    const W = 720, H = 1000, c = document.createElement('canvas'); c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#c4213a'; g.fillRect(0, 0, W, 18);
+    g.imageSmoothingEnabled = false; g.drawImage(img, 100, 60, 520, 520);
+    g.textAlign = 'center'; g.fillStyle = '#111';
+    g.font = '800 46px ui-monospace, Menlo, monospace'; g.fillText(tk.ticket, W / 2, 650);
+    g.font = '800 38px system-ui, -apple-system, sans-serif'; g.fillText((tk.first_name + ' ' + tk.last_name).slice(0, 34), W / 2, 712);
+    g.font = '400 24px system-ui, -apple-system, sans-serif'; g.fillStyle = '#444';
+    const st = L.STAGES.find(x => x.id === tk.stage); const stage = st && st.labelKey ? t(st.labelKey) : (tk.stage || '');
+    const sch = schoolLabel(tk.school); g.fillText(sch.length > 52 ? sch.slice(0, 50) + '…' : sch, W / 2, 760); g.fillText(stage, W / 2, 796);
+    g.fillStyle = '#a3172b'; g.fillRect(60, 840, W - 120, 2);
+    g.fillStyle = '#111'; g.font = '700 26px system-ui, -apple-system, sans-serif';
+    g.fillText(t('calTitle'), W / 2, 890);
+    g.font = '400 24px system-ui, -apple-system, sans-serif'; g.fillStyle = '#444';
+    g.fillText([$('fDate').textContent, $('fTime').textContent, $('fPlace').textContent].filter(Boolean).join(' · '), W / 2, 930);
+    return await new Promise(r => c.toBlob(r, 'image/png'));
+  }
+  async function shareTicket(tk) {
+    const blob = await ticketBlob(tk);
+    const file = new File([blob], tk.ticket + '.png', { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: t('shareText') }); return; }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = tk.ticket + '.png';
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+
+  function showTickets(list, freshTicket, note) {
+    view = () => showTickets(tickets(), freshTicket, note);
+    const one = tk => {
+      const url = new URL('einlass.html', location.href); url.hash = tk.ticket;
+      return `<div class="ticket" dir="ltr">
+        <div class="qr">${window.makeQrSvg(url.toString(), { level: 'M', border: 2 })}</div>
+        <div class="code">${esc(tk.ticket)}</div>
+        <div class="who">${esc(tk.first_name)} ${esc(tk.last_name)}</div>
+        <div class="meta">${esc(schoolLabel(tk.school))} · ${L.stageBadge(tk.stage)}</div>
+      </div>
+      <p class="muted small tk-actions">
+        <button class="btn small gold" type="button" data-share="${esc(tk.client)}">${t('share')}</button>
+        <button class="btn small ghost" type="button" data-edit="${esc(tk.client)}">${t('edit')}</button>
+        <button class="btn small ghost danger" type="button" data-cancel="${esc(tk.client)}">${t('cancel')}</button></p>`;
+    };
+    const head = note ? `<div class="card"><p style="margin:0">${note}</p></div>`
+      : list.length ? `<div class="card" style="border-color:var(--ok)"><h2>${freshTicket ? t('done') : t('already')}</h2>${freshTicket ? '' : `<p class="muted small" style="margin:0">${t('alreadyText')}</p>`}</div>` : '';
+    main.innerHTML = `<div style="display:grid;gap:14px">
+      ${head}
+      ${list.length ? `<div class="hint">${t('screenshot')}</div>` : ''}
+      ${list.map(one).join('')}
+      <button class="btn gold block" type="button" id="add">${list.length ? t('addPerson') : t('formTitle')}</button>
+      <p class="muted small" style="margin:-6px 0 0;text-align:center">${t('addPersonHint')}</p>
+      <p class="muted small" style="margin:0;text-align:center">${t('otherDevice')}</p>
+    </div>`;
+    $('add').onclick = () => { showForm({}, L.uuid()); window.scrollTo(0, 0); };
+    main.querySelectorAll('[data-share]').forEach(b => b.onclick = async () => {
+      const tk = tickets().find(x => x.client === b.dataset.share); if (!tk) return;
+      b.disabled = true;
+      try { await shareTicket(tk); } catch (e) { if (!e || e.name !== 'AbortError') alert(t('shareFail')); }
+      b.disabled = false;
+    });
+    main.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => { const tk = tickets().find(x => x.client === b.dataset.edit); if (tk) showForm(tk, tk.client); });
+    main.querySelectorAll('[data-cancel]').forEach(b => b.onclick = async () => {
+      const tk = tickets().find(x => x.client === b.dataset.cancel); if (!tk) return;
+      const name = esc(tk.first_name + ' ' + tk.last_name);
+      if (!confirm(t('cancelConfirm', { name: tk.first_name + ' ' + tk.last_name }))) return;
+      b.disabled = true;
+      try {
+        const r = await api.cancel(tk.client, tk.ticket);
+        if (!r || !r.cancelled) throw new Error('no');
+        const rest = tickets().filter(x => x.client !== tk.client); saveTickets(rest);
+        showTickets(rest, null, t('cancelled', { name }));
+      } catch (e) { alert(e && e.code === 'network' ? t('errNetwork') : t('cancelFail')); b.disabled = false; }
+    });
+  }
+
+  I.apply(); bar();
+  load();
+})();
+</script>
+</body>
+</html>
