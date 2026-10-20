@@ -30,6 +30,7 @@
     </div>
   </header>
   <div class="demo" id="demoNote" data-t="demo" hidden></div>
+  <a class="btn gold block" id="albumBtn" href="album.html" hidden style="display:block;text-align:center;text-decoration:none;margin-bottom:14px"><span data-t="albumBtn"></span></a>
   <main id="main"><div class="card"><p class="muted" data-t="loading"></p></div></main>
   <footer>Slowmotion Kampfsystem · <span id="fWeb">www.slowmotion-kampfsystem.de</span></footer>
 </div>
@@ -132,6 +133,7 @@
     }
     if (!event) { main.innerHTML = `<div class="card"><h2>${t('closedTitle')}</h2><p class="muted">${t('closedText')}</p></div>`; return; }
     facts();
+    { const td = L.todayBerlin(); $('albumBtn').hidden = !(event.album_view_until && td <= event.album_view_until && (td >= event.event_date || !L.online)); }
     const list = tickets();
     list.length ? showTickets(list) : showForm();
   }

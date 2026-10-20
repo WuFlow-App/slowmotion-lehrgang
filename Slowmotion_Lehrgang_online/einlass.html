@@ -103,6 +103,8 @@
   .poster .p-url { font: 600 14px ui-monospace, Menlo, monospace; overflow-wrap: anywhere; }
   video { width: 100%; border-radius: 12px; background: #000; aspect-ratio: 3/4; object-fit: cover; }
   .print-only { display: none; }
+  main > * { min-width: 0; }
+  #alf .field, #alf input { min-width: 0; max-width: 100%; }
   /* Handy: Name oben in voller Breite, Knöpfe darunter in einer Reihe */
   @media (max-width: 600px) {
     .person { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 10px 8px; padding: 12px; }
@@ -114,6 +116,15 @@
     .tabs button { padding: 9px 12px; }
   }
   @media print {
+    html { background: #fff !important; }
+    .printing.cards { display: grid !important; grid-template-columns: repeat(2, 88mm); grid-auto-rows: 54mm; justify-content: center; }
+    .cardp { border: 0.3mm dashed #888; padding: 4mm; display: grid; grid-template-columns: 30mm 1fr; gap: 4mm; align-items: center; color: #000; background: #fff; font-family: system-ui, -apple-system, Arial, sans-serif; }
+    .cardp svg { width: 30mm; height: 30mm; display: block; }
+    .cardp .t1 { font-weight: 900; font-style: italic; text-transform: uppercase; font-size: 15pt; line-height: 1; }
+    .cardp .t2 { font-size: 7.5pt; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; margin: 1mm 0 2mm; }
+    .cardp .t3 { font-size: 8.5pt; line-height: 1.25; }
+    .cardp .t4 { font-size: 7.5pt; margin-top: 2mm; color: #333; }
+    @page { size: A4; margin: 10mm; }
     body { background: #fff; color: #000; padding: 0; }
     .top, main > *:not(.printing), footer, .demo { display: none !important; }
     main { padding: 0; }
@@ -257,7 +268,7 @@
     top.innerHTML = `<div class="top-row"><div><div class="ev-title">${esc(e ? e.title : 'Lehrgang')}</div><div class="ev-sub">${e ? esc([L.fmtDate(e.event_date), e.time_text].filter(Boolean).join(' · ')) : ''}</div></div>${pill}</div>
       ${stale}
       <div class="counts"><button class="count" type="button" data-cf="da"><b>${c.da}</b><span>von ${c.all} da</span></button><button class="count" type="button" data-cf="alle"><b>${c.paid}</b><span>bezahlt${c.free ? ` · ${c.free} frei` : ''}</span></button><button class="count ${c.open ? 'warn' : ''}" type="button" data-cf="zahlen"><b>${c.open}</b><span>da, Bezahlung offen</span></button></div>
-      <div class="tabs" role="tablist">${[['einlass', 'Einlass'], ['uebersicht', 'Übersicht'], ['plakat', 'Plakat'], ['lehrgaenge', 'Lehrgänge']].map(([k, v]) => `<button role="tab" aria-selected="${tab === k}" data-tab="${k}">${v}</button>`).join('')}</div>`;
+      <div class="tabs" role="tablist">${[['einlass', 'Einlass'], ['uebersicht', 'Übersicht'], ['plakat', 'Plakat'], ['album', 'Album'], ['lehrgaenge', 'Lehrgänge']].map(([k, v]) => `<button role="tab" aria-selected="${tab === k}" data-tab="${k}">${v}</button>`).join('')}</div>`;
     top.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; renderTop(); renderMain(); });
   }
 
@@ -268,6 +279,7 @@
     if (tab === 'uebersicht') return renderOverview(m);
     if (tab === 'plakat') return renderPoster(m);
     if (tab === 'lehrgaenge') return renderEvents(m);
+    if (tab === 'album') return renderAlbum(m);
   }
 
   /* ---------- Einlass ---------- */
@@ -641,6 +653,132 @@
       </div>`;
     $('prp').onclick = () => window.print();
     $('cpy').onclick = async () => { try { await navigator.clipboard.writeText(url); $('cpy').textContent = 'Kopiert'; } catch (e) { prompt('Link:', url); } };
+  }
+
+  /* ---------- Fotoalbum ---------- */
+  let album = null, albumMsg = '';
+  async function purgeAlbum() {
+    const pg = (album && album.purge) || []; if (!pg.length) return;
+    try { await api.albumDeleteFiles(pg.flatMap(x => [x.path, x.thumb])); await api.albumPurged(pg.map(x => x.id)); album.purge = []; } catch (e) {}
+  }
+  async function renderAlbum(m, keepMsg) {
+    if (!keepMsg) albumMsg = '';
+    if (!album || album._ev !== eventId) m.innerHTML = '<div class="card"><p class="muted" style="margin:0">Album wird geladen …</p></div>';
+    try { album = await api.adminAlbum(key, eventId); album._ev = eventId; }
+    catch (e) { m.innerHTML = `<div class="card"><h2>Fotoalbum</h2><p class="muted" style="margin:0">${e.code === 'network' ? 'Das Album braucht Internet.' : 'Album konnte nicht geladen werden. Ist die Datenbank-Ergänzung „Fotoalbum“ eingespielt?'}</p><div><button class="btn ghost small" id="art" type="button">Erneut versuchen</button></div></div>`; $('art').onclick = () => renderAlbum(m); return; }
+    purgeAlbum();
+    drawAlbum(m);
+  }
+  function albumLink(code) { return new URL('album.html', location.href).toString() + (code ? '#' + encodeURIComponent(code) : ''); }
+  function drawAlbum(m) {
+    const s = album.settings || {}, items = album.items || [];
+    const hidden = items.filter(x => x.status === 'hidden'), shown = items.filter(x => x.status === 'ok');
+    const pct = Math.min(100, Math.round((album.usage || 0) / (album.limit || 1) * 100));
+    const mb = n => Math.round(n / 1048576) + ' MB';
+    const link = albumLink(s.code);
+    const thumb = x => { const u = api.mediaUrl(x.thumb || (x.kind === 'photo' ? x.path : '')); return u ? `<img src="${esc(u)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block">` : '<span style="font-size:22px">🎬</span>'; };
+    const tile = x => `<button type="button" data-mi="${x.id}" style="position:relative;aspect-ratio:1;border:0;padding:0;border-radius:6px;overflow:hidden;background:var(--panel-2);display:grid;place-items:center;cursor:pointer">${thumb(x)}${x.kind === 'video' ? '<span style="position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:22px;text-shadow:0 1px 4px #000">▶</span>' : ''}</button>`;
+    m.innerHTML = `
+      ${albumMsg ? `<div class="hint">${esc(albumMsg)}</div>` : ''}
+      ${!s.view_until || !s.upload_until ? '<div class="stale">⚠ Für diesen Lehrgang fehlt noch, wie lange das Fotoalbum offen ist. Bitte unten „Hochladen bis“ und „Ansehen bis“ eintragen. Vorher lassen sich keine Kärtchen und kein Plakat drucken.</div>' : ''}
+      ${hidden.length ? `<div class="card"><h2>Gemeldet / ausgeblendet (${hidden.length})</h2>
+        <p class="muted small" style="margin:0">Diese Bilder sieht gerade niemand. Prüfen: wieder zeigen oder endgültig löschen.</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px">${hidden.map(tile).join('')}</div></div>` : ''}
+      <form class="card" id="alf"><h2>Fotoalbum – Einstellungen</h2>
+        <div class="row2"><div class="field"><label for="aup">Hochladen bis</label><input type="date" id="aup" value="${esc(s.upload_until || '')}"></div>
+        <div class="field"><label for="avw">Ansehen bis (danach automatisch gelöscht)</label><input type="date" id="avw" value="${esc(s.view_until || '')}"></div></div>
+        <div class="field"><label for="afilm">Link zum Film vom Filmer (optional)</label><input type="url" id="afilm" value="${esc(s.film_url || '')}" placeholder="https://…"></div>
+        <p class="err" id="aerr" hidden></p>
+        <div style="display:flex;justify-content:flex-end"><button class="btn" type="submit">Speichern</button></div>
+      </form>
+      <div class="card"><h2>Kärtchen für den Lehrgang</h2>
+        <p class="muted small" style="margin:0">Jede Person bekommt am Einlass ein Kärtchen. Der QR-Code darauf führt direkt ins Album dieses Lehrgangs – ohne Passwort. Der Zugangscode wird automatisch erzeugt und steckt im QR-Code.</p>
+        <div class="tools2"><button class="btn small" type="button" id="acard">Kärtchen drucken (10 pro Seite)</button><button class="btn small" type="button" id="apr">Plakat drucken (zum Abfotografieren)</button><button class="btn ghost small" type="button" id="acp">Album-Link kopieren</button></div>
+        <p class="muted small" style="margin:0">Anzahl Blätter im Druckfenster bei „Kopien“ einstellen (z. B. 6 Kopien = 60 Kärtchen).</p>
+        <details><summary class="muted small" style="cursor:pointer">Zugangscode: ${esc(s.code || '–')}</summary>
+          <p class="muted small" style="margin:8px 0">Nur ändern, wenn der Code in falsche Hände geraten ist. <b>Alle bisher gedruckten Kärtchen funktionieren danach nicht mehr.</b></p>
+          <button class="btn ghost small danger" type="button" id="anew">Neuen Zugangscode erzeugen</button></details>
+      </div>
+      <div class="card"><h2>Speicher</h2>
+        <div style="height:10px;background:var(--panel-2);border-radius:6px;overflow:hidden"><i style="display:block;height:100%;width:${pct}%;background:${pct > 85 ? '#c4213a' : 'var(--gold)'}"></i></div>
+        <p class="muted small" style="margin:0">${mb(album.usage || 0)} von ${mb(album.limit || 0)} belegt (${pct} %) · ${shown.filter(x => x.kind === 'photo').length} Fotos, ${shown.filter(x => x.kind === 'video').length} Clips sichtbar</p>
+      </div>
+      <div class="card"><h2>Alle sichtbaren Bilder (${shown.length})</h2>
+        ${shown.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:4px">${shown.map(tile).join('')}</div>` : '<p class="muted" style="margin:0">Noch keine Bilder.</p>'}
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><a class="btn ghost small" href="${esc(link)}" target="_blank" rel="noopener" style="text-decoration:none">Album wie Teilnehmende öffnen</a><button class="btn ghost small danger" type="button" id="aclr">Album leeren</button></div>
+        <p class="muted small" style="margin:0">„Album leeren“ löscht alle Bilder dieses Lehrgangs endgültig – z. B. Testbilder vor dem Lehrgang.</p>
+      </div>
+      <div class="poster printing print-only" id="apost" style="display:none"></div>`;
+    $('alf').onsubmit = async ev => {
+      ev.preventDefault();
+      const st = { upload_until: $('aup').value || null, view_until: $('avw').value || null, film_url: $('afilm').value.trim() };
+      const err = t => { $('aerr').textContent = t; $('aerr').hidden = false; };
+      if (st.film_url && !/^https:\/\//i.test(st.film_url)) return err('Der Film-Link muss mit https:// beginnen.');
+      if (!st.view_until) return err('Bitte „Ansehen bis“ eintragen – so lange ist das Album offen, danach wird alles gelöscht.');
+      if (!st.upload_until) return err('Bitte „Hochladen bis“ eintragen.');
+      if (st.upload_until && st.view_until && st.upload_until > st.view_until) return err('„Hochladen bis“ muss vor „Ansehen bis“ liegen.');
+      try { album = await api.adminAlbumSave(key, eventId, st); album._ev = eventId; albumMsg = 'Gespeichert.'; drawAlbum(m); }
+      catch (e) { err(e.code === 'network' ? 'Keine Verbindung.' : 'Speichern hat nicht geklappt.'); }
+    };
+    const copy = async (txt, btn) => { const old = btn.textContent; try { await navigator.clipboard.writeText(txt); btn.textContent = '✓ Kopiert'; } catch (e) { prompt('Bitte kopieren:', txt); } setTimeout(() => { btn.textContent = old; }, 1800); };
+    $('acp').onclick = () => copy(link, $('acp'));
+    let armedN = false;
+    $('anew').onclick = async () => {
+      if (!armedN) { armedN = true; $('anew').textContent = 'Wirklich? Alte Kärtchen werden ungültig'; return; }
+      try { album = await api.adminAlbumNewCode(key, eventId); album._ev = eventId; albumMsg = 'Neuer Zugangscode erzeugt. Bitte neue Kärtchen drucken.'; drawAlbum(m); } catch (e) { albumMsg = 'Hat nicht geklappt.'; drawAlbum(m); }
+    };
+    $('acard').onclick = () => {
+      if (!s.view_until || !s.upload_until) { albumMsg = '⚠ Bitte zuerst „Hochladen bis“ und „Ansehen bis“ eintragen und speichern – die Daten stehen auf Kärtchen und Plakat.'; drawAlbum(m); const f = $('avw'); if (f) { f.focus(); f.scrollIntoView({ block: 'center' }); } return; }
+      const p = $('apost'); p.style.display = ''; p.className = 'printing print-only cards';
+      const d = s.event_date ? new Date(s.event_date + 'T12:00').toLocaleDateString('de-DE') : '';
+      const until = s.view_until ? new Date(s.view_until + 'T12:00').toLocaleDateString('de-DE') : '';
+      const qr = window.makeQrSvg(link, { level: 'M', border: 1 });
+      const one = `<div class="cardp"><div>${qr}</div><div><div class="t1">Fotos &amp; Videos</div><div class="t2">${esc(s.title || 'Slowmotion Lehrgang')}${d ? ' · ' + d : ''}</div>
+        <div class="t3">Scannen: Bilder ansehen, herunterladen und eigene hochladen.${until ? `<br>Offen bis <b>${until}</b>.` : ''}</div>
+        <div class="t4">Tipp: Kärtchen abfotografieren – der Code funktioniert auch vom Foto.</div></div></div>`;
+      p.innerHTML = one.repeat(10);
+      document.querySelectorAll('.printing').forEach(x => { if (x !== p) x.classList.remove('printing'); });
+      window.print(); setTimeout(() => { p.style.display = 'none'; p.className = 'poster printing print-only'; }, 500);
+    };
+    $('apr').onclick = () => {
+      if (!s.view_until || !s.upload_until) { albumMsg = '⚠ Bitte zuerst „Hochladen bis“ und „Ansehen bis“ eintragen und speichern – die Daten stehen auf Kärtchen und Plakat.'; drawAlbum(m); const f = $('avw'); if (f) { f.focus(); f.scrollIntoView({ block: 'center' }); } return; }
+      const p = $('apost'); p.style.display = ''; p.style.padding = '0';
+      const dd = s.event_date ? new Date(s.event_date + 'T12:00').toLocaleDateString('de-DE') : '';
+      const vu = s.view_until ? new Date(s.view_until + 'T12:00').toLocaleDateString('de-DE') : '';
+      p.innerHTML = `<div style="border:1.5mm solid #111;border-radius:6mm;padding:10mm 8mm;display:grid;gap:5mm;justify-items:center;width:100%">
+        <div style="font-size:13px;letter-spacing:.3em;text-transform:uppercase;font-weight:800">Slowmotion · ${esc(s.title || 'Lehrgang')}${dd ? ' · ' + dd : ''}</div>
+        <div class="p-title">Fotos &amp; Videos</div>
+        <div style="font-size:20px;font-weight:800">Kein Kärtchen bekommen?<br>Einfach diesen QR-Code abfotografieren!</div>
+        <div class="p-qr">${window.makeQrSvg(link, { level: 'M', border: 2 })}</div>
+        <div style="font-size:15px;max-width:460px">Mit der Handykamera scannen – oder später das Foto davon öffnen.<br>Bilder ansehen, herunterladen und eigene Fotos &amp; kurze Clips hochladen.</div>
+        ${vu ? `<div style="font-size:16px;font-weight:800">Offen bis ${vu}</div>` : ''}
+        <div style="font-size:12px;color:#444">Wer nicht auf einem Bild sein möchte: Bild öffnen › „Bitte entfernen“.</div></div>`;
+      document.querySelectorAll('.printing').forEach(x => { if (x !== p) x.classList.remove('printing'); });
+      window.print(); setTimeout(() => { p.style.display = 'none'; }, 500);
+    };
+    let armed = false;
+    $('aclr').onclick = async () => {
+      if (!armed) { armed = true; $('aclr').textContent = 'Wirklich alles löschen?'; setTimeout(() => { if ($('aclr')) { armed = false; $('aclr').textContent = 'Album leeren'; } }, 4000); return; }
+      try { album = await api.adminAlbumClear(key, eventId); album._ev = eventId; await purgeAlbum(); albumMsg = 'Album geleert.'; drawAlbum(m); } catch (e) { albumMsg = 'Hat nicht geklappt.'; drawAlbum(m); }
+    };
+    m.querySelectorAll('[data-mi]').forEach(b => b.onclick = () => mediaDialog(m, items.find(x => x.id === b.dataset.mi)));
+  }
+  function mediaDialog(m, x) {
+    if (!x) return;
+    const src = api.mediaUrl(x.path);
+    openDialog(`<h2 style="margin:0">${x.kind === 'video' ? 'Clip' : 'Foto'} von ${esc(x.uploader || 'Gast')}</h2>
+      <div style="background:#000;border-radius:10px;overflow:hidden;display:grid;place-items:center;max-height:55vh">${x.kind === 'video' ? `<video src="${esc(src)}" controls playsinline style="max-width:100%;max-height:55vh"></video>` : `<img src="${esc(src)}" alt="" style="max-width:100%;max-height:55vh;display:block">`}</div>
+      <p class="muted small" style="margin:0">${new Date(x.created_at).toLocaleString('de-DE')}${x.reported ? ' · <b style="color:#ff8f9c">gemeldet („Bitte entfernen“)</b>' : ''}</p>
+      <div class="row">
+        ${x.status === 'hidden' ? '<button class="btn small" type="button" data-ms="ok">Wieder zeigen</button>' : '<button class="btn ghost small" type="button" data-ms="hidden">Ausblenden</button>'}
+        <button class="btn ghost small danger" type="button" id="mdel">Endgültig löschen</button>
+        <button class="btn ghost small" type="button" id="mcl">Schließen</button>
+      </div>`);
+    const set = async st => { try { album = await api.adminMediaSet(key, eventId, x.id, st); album._ev = eventId; if (st === 'deleted') await purgeAlbum(); closeDialog(); drawAlbum(m); } catch (e) { closeDialog(); albumMsg = e.code === 'network' ? 'Keine Verbindung.' : 'Hat nicht geklappt.'; drawAlbum(m); } };
+    dlgBody.querySelectorAll('[data-ms]').forEach(b => b.onclick = () => set(b.dataset.ms));
+    let armed = false;
+    $('mdel').onclick = () => { if (!armed) { armed = true; $('mdel').textContent = 'Wirklich löschen?'; return; } set('deleted'); };
+    $('mcl').onclick = closeDialog;
   }
 
   /* ---------- Lehrgänge ---------- */

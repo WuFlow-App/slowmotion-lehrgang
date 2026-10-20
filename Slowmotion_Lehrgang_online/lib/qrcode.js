@@ -1260,5 +1260,5 @@ var QRCode=req('index'),ECL=req('QRErrorCorrectLevel');
 window.makeQrSvg=function(text,opts){opts=opts||{};var q=new QRCode(-1,ECL[opts.level||'M']);q.addData(text);q.make();
 var n=q.getModuleCount(),b=opts.border==null?4:opts.border,s=n+2*b,d='';
 for(var r=0;r<n;r++)for(var c=0;c<n;c++)if(q.isDark(r,c))d+='M'+(c+b)+' '+(r+b)+'h1v1h-1z';
-return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+s+' '+s+'" shape-rendering="crispEdges" role="img" aria-label="QR-Code"><rect width="100%" height="100%" fill="#fff"/><path d="'+d+'" fill="#000"/></svg>';};
+return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+s+' '+s+'" shape-rendering="crispEdges" role="img" aria-label="QR-Code"><rect width="100%" height="100%" fill="#fff"/><path d="'+d+'" fill="'+(opts.color||'#000')+'"/></svg>';};
 })();

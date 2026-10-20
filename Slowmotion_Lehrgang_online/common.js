@@ -71,8 +71,9 @@
   }
 
   class ApiError extends Error { constructor(code, msg) { super(msg || code); this.code = code; } }
-  const KNOWN = ['bad_key', 'invalid', 'no_event', 'full'];
+  const KNOWN = ['bad_key', 'invalid', 'no_event', 'full', 'bad_code', 'album_closed', 'upload_closed', 'too_big', 'too_long'];
 
+  function base() { return String(conf.supabaseUrl || '').replace(/\/$/, ''); }
   async function rpc(fn, payload) {
     const headers = { apikey: conf.supabaseAnonKey, 'Content-Type': 'application/json' };
     if (/^eyJ/.test(conf.supabaseAnonKey)) headers.Authorization = 'Bearer ' + conf.supabaseAnonKey;
@@ -130,7 +131,7 @@
   }
   function dAdmin(key) { if (key !== DEMO_PW) throw new ApiError('bad_key'); }
   const demo = {
-    async publicEvent() { return activeEvent(dload()); },
+    async publicEvent() { return dAlbumEvent(dload()); },
     async register(client, f) {
       const d = dload(), ev = activeEvent(d); if (!ev) throw new ApiError('no_event');
       if (!f.first_name.trim() || !f.last_name.trim() || !f.school || !f.stage) throw new ApiError('invalid');
@@ -170,6 +171,87 @@
     reset() { store(DEMO, null); Object.keys(localStorage).filter(k => k.startsWith('lg_')).forEach(k => store(k, null)); }
   };
 
+  /* ---------- Fotoalbum (Vorschau: nur dieser Browser) ---------- */
+  const DMEDIA = 'lg_demo_media', BLOBS = new Map();
+  function dmLoad() { return storeJson(DMEDIA) || []; }
+  function dmSave(l) { try { storeJson(DMEDIA, l); } catch (e) {} }
+  function todayBerlin() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin' }).format(new Date()); }
+  function addDays(d, n) { const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); }
+  function dAlbumEvent(d) {
+    const ev = activeEvent(d); if (!ev) return null;
+    dDefaults(ev); dsave(d);
+    return ev;
+  }
+  function newCode() { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; return Array.from(crypto.getRandomValues(new Uint8Array(12)), x => a[x % 32]).join(''); }
+  function dDefaults(ev) {
+    if (!ev.album_code) ev.album_code = newCode();
+    if (ev.event_date && !ev.album_upload_until) ev.album_upload_until = addDays(ev.event_date, 14);
+    if (ev.event_date && !ev.album_view_until) ev.album_view_until = addDays(ev.event_date, 43);
+  }
+  function normCode(c) { return String(c || '').replace(/\s/g, '').toUpperCase(); }
+  function dAccess(code) {
+    const d = dload(), ev = dAlbumEvent(d); let c = normCode(code); if (!c) throw new ApiError('bad_code');
+    if (/^[A-Z0-9]{6}$/.test(c)) c = 'SM-' + c;
+    const person = d.people.find(p => p.event_id === ev.id && p.ticket.toUpperCase() === c);
+    if (!person && !(ev.album_code && normCode(ev.album_code) === normCode(code))) throw new ApiError('bad_code');
+    if (!ev.album_view_until || todayBerlin() > ev.album_view_until) throw new ApiError('album_closed');
+    return { ev, person };
+  }
+  const LIMIT = 734003200;
+  function dUsage(evId) { return dmLoad().filter(m => m.event_id === evId && m.status !== 'deleted').reduce((s, m) => s + m.size + m.thumb_size, 0); }
+  const demoAlbum = {
+    async albumList(code, client) {
+      const { ev, person } = dAccess(code);
+      return { event: { id: ev.id, title: ev.title, event_date: ev.event_date, upload_until: ev.album_upload_until, view_until: ev.album_view_until, film_url: ev.album_film_url || null, can_upload: todayBerlin() <= (ev.album_upload_until || ev.album_view_until) },
+        name: person ? person.first_name + ' ' + person.last_name.charAt(0) + '.' : null,
+        items: dmLoad().filter(m => m.event_id === ev.id && m.status === 'ok').sort((a, b) => b.created_at.localeCompare(a.created_at)).map(m => ({ id: m.id, path: m.path, thumb: m.thumb_path, kind: m.kind, uploader: m.uploader, mine: m.client === client, created_at: m.created_at, duration: m.duration })),
+        usage: dUsage(ev.id), limit: LIMIT };
+    },
+    async albumBegin(code, client, name, f) {
+      const { ev, person } = dAccess(code);
+      if (todayBerlin() > (ev.album_upload_until || ev.album_view_until)) throw new ApiError('upload_closed');
+      if (f.kind === 'video' && f.size > 52428800) throw new ApiError('too_big');
+      if (f.kind === 'video' && (f.duration || 0) > 32) throw new ApiError('too_long');
+      if (dUsage(ev.id) + f.size + (f.thumb_size || 0) > LIMIT) throw new ApiError('full');
+      const id = uuid(), l = dmLoad();
+      const m = { id, event_id: ev.id, path: 'demo/' + id, thumb_path: f.thumb_size ? 'demo/' + id + '_t' : null, kind: f.kind, mime: f.mime, size: f.size, thumb_size: f.thumb_size || 0, duration: f.duration || null, client, uploader: person ? person.first_name + ' ' + person.last_name.charAt(0) + '.' : (String(name || '').trim().slice(0, 40) || 'Gast'), status: 'pending', reported: false, created_at: new Date().toISOString() };
+      l.push(m); dmSave(l); return { id, path: m.path, thumb_path: m.thumb_path };
+    },
+    async albumUpload(path, blob, onProgress) {
+      // Fotos bleiben als Daten im Browser erhalten, Videos nur bis zum Neuladen
+      if (blob.type.startsWith('image/')) {
+        const url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
+        try { localStorage.setItem('lg_demo_blob_' + path, url); } catch (e) { BLOBS.set(path, URL.createObjectURL(blob)); }
+      } else BLOBS.set(path, URL.createObjectURL(blob));
+      for (let i = 1; i <= 5; i++) { await new Promise(r => setTimeout(r, 60)); if (onProgress) onProgress(i / 5); }
+    },
+    async albumDone(client, id) { const l = dmLoad(); const m = l.find(x => x.id === id && x.client === client && x.status === 'pending'); if (m) { m.status = 'ok'; dmSave(l); } return { ok: !!m }; },
+    async albumReport(code, id) { dAccess(code); const l = dmLoad(); const m = l.find(x => x.id === id && x.status === 'ok'); if (m) { m.status = 'hidden'; m.reported = true; dmSave(l); } return { ok: true }; },
+    async albumRemoveOwn(client, id) { const l = dmLoad(); const m = l.find(x => x.id === id && x.client === client); if (m) { m.status = 'deleted'; dmSave(l); } return { ok: true }; },
+    async albumDeleteFiles(paths) { paths.forEach(p => { if (!p) return; try { localStorage.removeItem('lg_demo_blob_' + p); } catch (e) {} BLOBS.delete(p); }); },
+    async albumPurged(ids) { dmSave(dmLoad().filter(m => !ids.includes(m.id))); return { removed: ids.length }; },
+    mediaUrl(path) { if (!path) return ''; let u = null; try { u = localStorage.getItem('lg_demo_blob_' + path); } catch (e) {} return u || BLOBS.get(path) || ''; },
+    downloadUrl(path) { return demoAlbum.mediaUrl(path); },
+    async adminAlbum(key, evId) {
+      dAdmin(key); const d = dload(); const ev = d.events.find(e => e.id === evId) || activeEvent(d); dDefaults(ev); dsave(d);
+      const all = dmLoad();
+      return { settings: { code: ev.album_code || '', title: ev.title, event_date: ev.event_date, upload_until: ev.album_upload_until || null, view_until: ev.album_view_until || null, film_url: ev.album_film_url || '' },
+        items: all.filter(m => m.event_id === ev.id && (m.status === 'ok' || m.status === 'hidden')).sort((a, b) => (b.reported - a.reported) || b.created_at.localeCompare(a.created_at)).map(m => ({ id: m.id, path: m.path, thumb: m.thumb_path, kind: m.kind, uploader: m.uploader, status: m.status, reported: m.reported, created_at: m.created_at, size: m.size + m.thumb_size })),
+        usage: dUsage(ev.id), limit: LIMIT,
+        purge: all.filter(m => m.status === 'deleted' || (ev.album_view_until && todayBerlin() > ev.album_view_until && m.event_id === ev.id)).map(m => ({ id: m.id, path: m.path, thumb: m.thumb_path })) };
+    },
+    async adminAlbumSave(key, evId, s) {
+      dAdmin(key); const d = dload(); const ev = d.events.find(e => e.id === evId); if (!ev) throw new ApiError('invalid');
+      if (s.film_url && !/^https:\/\//i.test(s.film_url)) throw new ApiError('invalid');
+      Object.assign(ev, { album_upload_until: s.upload_until || null, album_view_until: s.view_until || null, album_film_url: (s.film_url || '').trim() }); dsave(d);
+      return demoAlbum.adminAlbum(key, evId);
+    },
+    async adminAlbumNewCode(key, evId) { dAdmin(key); const d = dload(); const ev = d.events.find(e => e.id === evId); if (ev) { ev.album_code = newCode(); dsave(d); } return demoAlbum.adminAlbum(key, evId); },
+    async adminMediaSet(key, evId, id, status) { dAdmin(key); const l = dmLoad(); const m = l.find(x => x.id === id); if (m) { m.status = status; if (status === 'ok') m.reported = false; dmSave(l); } return demoAlbum.adminAlbum(key, evId); },
+    async adminAlbumClear(key, evId) { dAdmin(key); const l = dmLoad(); l.forEach(m => { if (m.event_id === evId) m.status = 'deleted'; }); dmSave(l); return demoAlbum.adminAlbum(key, evId); }
+  };
+  Object.assign(demo, demoAlbum);
+
   const live = {
     publicEvent: () => rpc('lg_public_event'),
     register: (client, f) => rpc('lg_register', { p_client: client, p_first: f.first_name, p_last: f.last_name, p_school: f.school, p_stage: f.stage, p_photo: !!f.photo_ok }),
@@ -177,7 +259,42 @@
     adminData: (key, ev) => rpc('lg_admin_data', { p_key: key, p_event: ev || null }),
     adminSetPrices: (key, ev, r, red) => rpc('lg_admin_set_prices', { p_key: key, p_event: ev, p_regular: r, p_reduced: red }),
     adminSync: (key, ev, ops) => rpc('lg_admin_sync', { p_key: key, p_event: ev || null, p_ops: ops }),
-    adminSaveEvent: (key, e) => rpc('lg_admin_save_event', { p_key: key, p_event: e })
+
+    adminSaveEvent: (key, e) => rpc('lg_admin_save_event', { p_key: key, p_event: e }),
+    // Fotoalbum
+    albumList: (code, client) => rpc('lg_album_list', { p_code: code, p_client: client }),
+    albumBegin: (code, client, name, f) => rpc('lg_album_begin', { p_code: code, p_client: client, p_name: name || null, p_kind: f.kind, p_mime: f.mime, p_size: f.size, p_thumb_size: f.thumb_size || 0, p_duration: f.duration || null }),
+    albumUpload: (path, blob, onProgress) => new Promise((resolve, reject) => {
+      const x = new XMLHttpRequest();
+      x.open('POST', base() + '/storage/v1/object/lg-media/' + path);
+      x.setRequestHeader('apikey', conf.supabaseAnonKey);
+      if (/^eyJ/.test(conf.supabaseAnonKey)) x.setRequestHeader('Authorization', 'Bearer ' + conf.supabaseAnonKey);
+      x.setRequestHeader('Content-Type', blob.type || 'application/octet-stream');
+      x.setRequestHeader('x-upsert', 'false');
+      x.setRequestHeader('cache-control', 'max-age=31536000');
+      if (onProgress) x.upload.onprogress = ev => { if (ev.lengthComputable) onProgress(ev.loaded / ev.total); };
+      x.onload = () => x.status >= 200 && x.status < 300 ? resolve() : reject(new ApiError(x.status === 413 ? 'too_big' : 'server', x.responseText.slice(0, 200)));
+      x.onerror = () => reject(new ApiError('network'));
+      x.send(blob);
+    }),
+    albumDone: (client, id) => rpc('lg_album_done', { p_client: client, p_id: id }),
+    albumReport: (code, id) => rpc('lg_album_report', { p_code: code, p_id: id }),
+    albumRemoveOwn: (client, id) => rpc('lg_album_remove_own', { p_client: client, p_id: id }),
+    albumDeleteFiles: async paths => {
+      const list = paths.filter(Boolean); if (!list.length) return;
+      const headers = { apikey: conf.supabaseAnonKey, 'Content-Type': 'application/json' };
+      if (/^eyJ/.test(conf.supabaseAnonKey)) headers.Authorization = 'Bearer ' + conf.supabaseAnonKey;
+      const res = await fetch(base() + '/storage/v1/object/lg-media', { method: 'DELETE', headers, body: JSON.stringify({ prefixes: list }) });
+      if (!res.ok) throw new ApiError('server');
+    },
+    albumPurged: ids => rpc('lg_album_purged', { p_ids: ids }),
+    mediaUrl: path => path ? base() + '/storage/v1/object/public/lg-media/' + path : '',
+    downloadUrl: (path, name) => base() + '/storage/v1/object/public/lg-media/' + path + '?download=' + encodeURIComponent(name || ''),
+    adminAlbum: (key, ev) => rpc('lg_admin_album', { p_key: key, p_event: ev }),
+    adminAlbumSave: (key, ev, s) => rpc('lg_admin_album_save', { p_key: key, p_event: ev, p_code: s.code || null, p_upload_until: s.upload_until || null, p_view_until: s.view_until || null, p_film_url: s.film_url || null }),
+    adminAlbumNewCode: (key, ev) => rpc('lg_admin_album_newcode', { p_key: key, p_event: ev }),
+    adminMediaSet: (key, ev, id, status) => rpc('lg_admin_media_set', { p_key: key, p_event: ev, p_id: id, p_status: status }),
+    adminAlbumClear: (key, ev) => rpc('lg_admin_album_clear', { p_key: key, p_event: ev })
   };
 
   function registerSW() {
@@ -188,6 +305,6 @@
 
   const SHIELD = '<img src="logos/slowmotion.webp" alt="Slowmotion" style="width:100%;height:100%;object-fit:contain">';
 
-  window.LG = { STAGES, SCHOOLS, SCHOOL_SEP, splitSchools, joinSchools, online, store, storeJson, uuid, esc, stage, stageBadge, fmtDate, ApiError, applyOps, sortPeople, SHIELD, DEMO_PW,
+  window.LG = { todayBerlin, STAGES, SCHOOLS, SCHOOL_SEP, splitSchools, joinSchools, online, store, storeJson, uuid, esc, stage, stageBadge, fmtDate, ApiError, applyOps, sortPeople, SHIELD, DEMO_PW,
     api: online ? live : demo, demo: online ? null : demo, registerSW };
 })();
