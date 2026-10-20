@@ -94,7 +94,7 @@
   table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
   th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); }
   th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
-  td.n, th.n { text-align: right; }
+  td.n, th.n { text-align: right; white-space: nowrap; }
   .table-wrap { overflow-x: auto; }
   .poster { background: #fff; color: #111; border-radius: 16px; padding: 22px; display: grid; gap: 12px; justify-items: center; text-align: center; }
   .poster .p-title { font-weight: 900; font-style: italic; text-transform: uppercase; font-size: 34px; line-height: 1; }
@@ -103,6 +103,16 @@
   .poster .p-url { font: 600 14px ui-monospace, Menlo, monospace; overflow-wrap: anywhere; }
   video { width: 100%; border-radius: 12px; background: #000; aspect-ratio: 3/4; object-fit: cover; }
   .print-only { display: none; }
+  /* Handy: Name oben in voller Breite, Knöpfe darunter in einer Reihe */
+  @media (max-width: 600px) {
+    .person { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 10px 8px; padding: 12px; }
+    .person .who { grid-column: 1 / -1; }
+    .person .tog.da { width: 100%; min-width: 0; }
+    .person .paygrp { min-width: 0; }
+    .person .paygrp .tog.bz { flex: 1; min-width: 0; padding: 0 6px; }
+    .person .tog.more { width: 52px; min-width: 52px; }
+    .tabs button { padding: 9px 12px; }
+  }
   @media print {
     body { background: #fff; color: #000; padding: 0; }
     .top, main > *:not(.printing), footer, .demo { display: none !important; }

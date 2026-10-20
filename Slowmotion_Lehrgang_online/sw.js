@@ -1,5 +1,5 @@
 /* Hält die Seiten auch ohne Netz verfügbar (wichtig für den Einlass in der Halle). */
-const CACHE = 'slowmotion-lehrgang-v15';
+const CACHE = 'slowmotion-lehrgang-v16';
 const FILES = ['./', 'index.html', 'einlass.html', 'style.css', 'common.js', 'config.js', 'lang.js', 'lib/qrcode.js',
   'logos/slowmotion.webp', 'logos/einsteiger.webp', 'logos/level1.webp', 'logos/level2.webp', 'logos/level3.webp', 'logos/praktiker.webp',
   'logos/kampfsystem.webp', 'logos/ausbilder1.webp', 'logos/ausbilder2.webp', 'logos/fuehrungskraefte.webp', 'logos/ehrenmitglied.webp'];
