@@ -1,0 +1,13 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Lehrgangsseite veröffentlichen",
+      "type": "shell",
+      "command": "git add -A && (git diff --cached --quiet && echo 'Keine neuen Änderungen.' || git commit -q -m \"Aktualisierung $(date '+%d.%m.%Y %H:%M')\") && git push -q && echo '' && echo '✅ Veröffentlicht. Netlify ist in ca. 30 Sekunden fertig: https://slowmotion-lehrgang.netlify.app'",
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "problemMatcher": []
+    }
+  ]
+}

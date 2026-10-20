@@ -1,0 +1,8 @@
+# Dieses Repository ist ÖFFENTLICH. Niemals Passwörter oder Datenbank-Dateien hochladen.
+*.sql
+*.env
+.env*
+*passwort*
+*Passwort*
+*password*
+.DS_Store
