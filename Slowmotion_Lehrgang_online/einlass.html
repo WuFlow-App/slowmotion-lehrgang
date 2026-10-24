@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#0d0b0c">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Einlass">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Slowmotion Einlass</title>
 <link rel="stylesheet" href="style.css">
@@ -103,6 +107,22 @@
   .poster .p-url { font: 600 14px ui-monospace, Menlo, monospace; overflow-wrap: anywhere; }
   video { width: 100%; border-radius: 12px; background: #000; aspect-ratio: 3/4; object-fit: cover; }
   .print-only { display: none; }
+  #printArea { display: none; }
+  /* Feste Spalten: „Da“ steht in jeder Zeile an derselben Stelle */
+  .person { grid-template-columns: minmax(0, 1fr) 96px 220px; }
+  .person .tog.da { width: 96px; }
+  .person .paygrp { width: 220px; }
+  .person .paygrp .tog.bz { flex: 1; min-width: 0; padding: 0 6px; }
+  .colhead { display: grid; grid-template-columns: minmax(0, 1fr) 96px 220px; gap: 8px; padding: 0 10px 0 14px; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .fbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; background: #2a2210; border: 1px solid #8a6a1f; color: #f3d68c; border-radius: 10px; padding: 7px 10px 7px 12px; font-size: 14px; }
+  .fbar b { color: #fff; }
+  .toast { position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 60; width: min(560px, calc(100vw - 24px)); background: #1f2a24; border: 1px solid #2f9a63; color: #fff; border-radius: 14px; padding: 12px 14px; display: flex; gap: 10px; align-items: center; justify-content: space-between; box-shadow: 0 8px 30px rgba(0,0,0,.5); font-size: 15px; }
+  .btn.del { background: #7a1626; color: #fff; border: 1px solid #c4213a; margin-top: 10px; }
+  .pm hr { border: 0; border-top: 1px solid var(--line); margin: 6px 0 0; width: 100%; }
+  .hold { position: relative; overflow: hidden; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: none; }
+  .hold::before { content: ''; position: absolute; inset: 0; width: 0; background: rgba(201,162,74,.45); transition: width 0s; }
+  .hold.holding::before { width: 100%; transition: width 3s linear; }
+  .hold span { position: relative; }
   main > * { min-width: 0; }
   #alf .field, #alf input { min-width: 0; max-width: 100%; }
   /* Handy: Name oben in voller Breite, Knöpfe darunter in einer Reihe */
@@ -110,7 +130,8 @@
     .person { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 10px 8px; padding: 12px; }
     .person .who { grid-column: 1 / -1; }
     .person .tog.da { width: 100%; min-width: 0; }
-    .person .paygrp { min-width: 0; }
+    .person .paygrp { min-width: 0; width: auto; }
+    .colhead { display: none; }
     .person .paygrp .tog.bz { flex: 1; min-width: 0; padding: 0 6px; }
     .person .tog.more { width: 52px; min-width: 52px; }
     .tabs button { padding: 9px 12px; }
@@ -135,6 +156,8 @@
     .plist { color: #000; }
     .plist th, .plist td { border-bottom: 1px solid #999; color: #000; padding: 5px 6px; font-size: 12px; }
     .plist .box { display: inline-block; width: 14px; height: 14px; border: 1.5px solid #000; }
+    body.printlist .wrap, body.printlist dialog, body.printlist .toast { display: none !important; }
+    body.printlist #printArea { display: block !important; }
   }
 </style>
 </head>
@@ -143,6 +166,7 @@
   <div id="app"></div>
 </div>
 <dialog id="dlg"><div class="dlg" id="dlgBody"></div></dialog>
+<div id="printArea" class="plist"></div>
 
 <script src="config.js"></script>
 <script src="lang.js"></script>
@@ -171,6 +195,16 @@
   function openDialog(html) { dlgBody.innerHTML = html; if (dlg.showModal) { if (!dlg.open) dlg.showModal(); } else dlg.setAttribute('open', ''); }
   function closeDialog() { stopScan(); if (dlg.close) dlg.close(); else dlg.removeAttribute('open'); }
   dlg.addEventListener('close', stopScan);
+  let shownIds = new Set(), toastTimer = null;
+  function toast(html, btnLabel, onBtn) {
+    let t = $('toast'); if (t) t.remove(); clearTimeout(toastTimer);
+    t = document.createElement('div'); t.id = 'toast'; t.className = 'toast'; t.setAttribute('role', 'status');
+    t.innerHTML = `<span>${html}</span>${btnLabel ? `<button class="btn small gold" type="button" id="toastBtn">${esc(btnLabel)}</button>` : ''}`;
+    document.body.appendChild(t);
+    if (btnLabel) $('toastBtn').onclick = () => { t.remove(); onBtn(); };
+    toastTimer = setTimeout(() => t.remove(), 7000);
+  }
+  const FILTERS = [['todo', 'Noch zu erledigen'], ['offen', 'Noch nicht da'], ['vorab', 'Vorangemeldet, noch nicht da'], ['zahlen', 'Da, Bezahlung offen'], ['da', 'Da'], ['doppelt', 'Mögliche Doppeleinträge'], ['alle', 'Alle']];
   dlg.addEventListener('click', e => { if (e.target === dlg) closeDialog(); });
 
   /* ---------- Anmeldung am Gerät ---------- */
@@ -218,13 +252,24 @@
       if (e.code === 'bad_key') { L.store('lg_key', null); key = null; flushing = false; return showLogin('Das Passwort wurde geändert. Bitte neu anmelden.'); }
       syncState = e.code === 'network' ? 'offline' : 'error';
     } finally { flushing = false; }
-    renderTop(); renderMain(true);
+    renderTop();
+    // Nicht neu zeichnen, während jemand in ein Feld tippt (sonst springt der Cursor raus)
+    if (!typingInMain()) renderMain(true);
+  }
+  function typingInMain() {
+    const a = document.activeElement, m = $('main');
+    return !!(a && m && m.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.id !== 'q');
   }
   function act(op) {
     if (op.op === 'set' || op.op === 'add') op.at = op.at || new Date().toISOString();
+    const wasShown = op.op === 'set' && tab === 'einlass' && shownIds.has(op.id);
     queue.push(op); data.people = L.applyOps(people(), [op], data.event_id);
     if (op.op === 'add') L.sortPeople(data.people);
     saveLocal(); renderTop(); renderMain(true);
+    if (wasShown && !shownIds.has(op.id)) {
+      const x = people().find(y => y.id === op.id);
+      if (x) toast(`Gespeichert. <b>${esc(x.first_name)} ${esc(x.last_name)}</b> ist wegen des Filters ausgeblendet.`, 'Alle anzeigen', () => { filter = 'alle'; renderMain(); });
+    }
     clearTimeout(timer); timer = setTimeout(sync, 400);
   }
   window.addEventListener('online', () => sync());
@@ -288,9 +333,11 @@
     m.innerHTML = `<div class="tools"><input type="search" id="q" placeholder="Name oder Code suchen" value="${esc(search)}" autocomplete="off" aria-label="Name oder Code suchen"><button class="btn gold" id="add" type="button">+ Gast</button></div>
       <button class="btn ghost small" id="kiosk" type="button" title="Gerät der Person geben: Sie trägt sich selbst ein, ohne die Liste zu sehen">✍︎ Gast tippt selbst</button>
       <div class="bar">${canScan ? '<button class="btn ghost small" id="scan" type="button">QR scannen</button>' : ''}
-        <label class="sel"><span>Anzeigen</span><select id="flt">${[['todo', 'Noch zu erledigen'], ['offen', 'Noch nicht da'], ['vorab', 'Vorangemeldet, noch nicht da'], ['zahlen', 'Da, Bezahlung offen'], ['da', 'Da'], ['doppelt', 'Mögliche Doppeleinträge'], ['alle', 'Alle']].map(([k, v]) => `<option value="${k}" ${filter === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+        <label class="sel"><span>Filter</span><select id="flt">${FILTERS.map(([k, v]) => `<option value="${k}" ${filter === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
         <label class="sel"><span>Sortieren</span><select id="sort">${[['name', 'Name'], ['schule', 'Schule'], ['stufe', 'Stufe'], ['vorab', 'Vorangemeldet zuerst'], ['ankunft', 'Ankunft']].map(([k, v]) => `<option value="${k}" ${sortBy === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label></div>
+      <div id="fbar"></div>
       <p class="muted small" id="fhint" style="margin:0"></p>
+      <div class="colhead"><span>Name</span><span>Anwesenheit</span><span>Zahlung</span></div>
       <div class="list" id="list"></div>
       ${canScan ? '' : '<p class="muted small" style="margin:0">QR-Codes scannst du mit der normalen Kamera-App: Dann öffnet sich diese Seite und hakt die Person automatisch ab.</p>'}
       <details class="prices"${prices().regular == null ? '' : ''}><summary>Einstellung: Preise – ${prices().regular != null ? eur(prices().regular) : 'noch nicht festgelegt'}${prices().reduced != null ? ' · ermäßigt ' + eur(prices().reduced) : ''}</summary>
@@ -327,18 +374,29 @@
   }
   function payLabel(x) {
     const st = payState(x), a = x.amount;
-    return st === 'bez' ? '✓ Bezahlt' + (a ? ' ' + eur(a) : '') : st === 'erm' ? '✓ Ermäßigt' + (a ? ' ' + eur(a) : '') : st === 'frei' ? '★ Frei' : 'Bezahlt';
+    return st === 'bez' ? '✓ Bezahlt' + (a ? ' ' + eur(a) : '') : st === 'erm' ? '✓ Ermäßigt' + (a ? ' ' + eur(a) : '') : st === 'frei' ? '★ Frei' : '€ offen';
   }
   function payMenu(id, anchorDone) {
     const x = people().find(y => y.id === id); if (!x) return;
     const pr = prices(), st = payState(x);
     const opt = (k, label) => `<button class="btn block ${st === k ? 'gold' : 'ghost'}" type="button" data-pm="${k}">${label}</button>`;
     openDialog(`<h2>Bezahlung: ${esc(x.first_name)} ${esc(x.last_name)}</h2>
-      <div class="pm">${opt('bez', '✓ Bezahlt' + (pr.regular != null ? ' – ' + eur(pr.regular) : ''))}${opt('erm', '✓ Ermäßigt' + (pr.reduced != null ? ' – ' + eur(pr.reduced) : ''))}${opt('frei', '★ Frei (Ehrenmitglied, eingeladener Gast)')}${opt('offen', 'Zurücksetzen: noch offen')}</div>
+      <div class="pm">${opt('bez', '✓ Bezahlt' + (pr.regular != null ? ' – ' + eur(pr.regular) : ''))}${opt('erm', '✓ Ermäßigt' + (pr.reduced != null ? ' – ' + eur(pr.reduced) : ''))}${opt('frei', '★ Frei (Ehrenmitglied, eingeladener Gast)')}${opt('offen', 'Zurücksetzen: noch offen')}
+      ${anchorDone ? '' : '<hr><button class="btn block del" id="pmdel" type="button">Person löschen</button>'}</div>
       <div class="row"><button class="btn ghost" id="pmc" type="button">Abbrechen</button></div>`);
+    if ($('pmdel')) $('pmdel').onclick = () => deleteAsk(id);
     const val = { bez: { paid: true, reduced: false, free: false, amount: pr.regular ?? null }, erm: { paid: true, reduced: true, free: false, amount: pr.reduced ?? null }, frei: { paid: false, reduced: false, free: true, amount: 0 }, offen: { paid: false, reduced: false, free: false, amount: null } };
     dlgBody.querySelectorAll('[data-pm]').forEach(b => b.onclick = () => { act(Object.assign({ op: 'set', id }, val[b.dataset.pm])); closeDialog(); if (anchorDone) anchorDone(); });
     $('pmc').onclick = closeDialog;
+  }
+  function deleteAsk(id) {
+    const x = people().find(y => y.id === id); if (!x) return;
+    openDialog(`<h2>Person löschen?</h2>
+      <p style="margin:0;font-size:18px"><b>${esc(x.first_name)} ${esc(x.last_name)}</b></p>
+      <p class="muted" style="margin:0">Der ganze Eintrag wird von der Liste entfernt: ${x.source === 'vorab' ? 'Voranmeldung, ' : ''}Anwesenheit und Zahlung${payState(x) === 'bez' || payState(x) === 'erm' ? ' (der Betrag zählt dann nicht mehr in der Kasse)' : ''}. Das kann nicht rückgängig gemacht werden.</p>
+      <div class="row"><button class="btn ghost" id="dlc" type="button">Abbrechen</button><button class="btn del" style="margin:0" id="dlok" type="button">Ja, endgültig löschen</button></div>`);
+    $('dlc').onclick = closeDialog;
+    $('dlok').onclick = () => { act({ op: 'delete', id }); closeDialog(); toast(`<b>${esc(x.first_name)} ${esc(x.last_name)}</b> wurde gelöscht.`); };
   }
   // Hauptknopf: nur offen ↔ bezahlt (regulär). Ermäßigt/Frei/Zurücksetzen über „⋯“.
   function mainPay(x) { return payState(x) === 'offen' ? { paid: true, reduced: false, free: false, amount: prices().regular ?? null } : null; }
@@ -371,7 +429,13 @@
     if (filter === 'da') p = p.filter(x => x.present);
     if (filter === 'zahlen') p = p.filter(x => x.present && !x.paid && !x.free);
     const hidden = people().length - p.length;
-    if ($('fhint')) $('fhint').textContent = (filter === 'todo' && hidden ? `${hidden} erledigt (da und bezahlt/frei) ausgeblendet.` : '') + (dups.size && filter !== 'doppelt' ? ` ${dups.size} mögliche Doppeleinträge – unter „Anzeigen“ prüfen.` : '') + (filter === 'doppelt' ? 'Gleicher Name mehrfach. Falschen Eintrag antippen › „Entfernen“. Achtung: Es kann auch zwei verschiedene Personen mit gleichem Namen geben.' : '');
+    shownIds = new Set(p.map(x => x.id));
+    if ($('fbar')) {
+      const fl = (FILTERS.find(f => f[0] === filter) || ['', ''])[1];
+      $('fbar').innerHTML = filter === 'alle' ? '' : `<div class="fbar"><span>Filter aktiv: <b>${esc(fl)}</b> · zeigt ${p.length} von ${people().length}</span><button class="btn small ghost" type="button" id="fall">Alle anzeigen</button></div>`;
+      if ($('fall')) $('fall').onclick = () => { filter = 'alle'; renderEinlass($('main')); };
+    }
+    if ($('fhint')) $('fhint').textContent = (filter === 'todo' && hidden ? `${hidden} erledigt (da und bezahlt/frei) ausgeblendet.` : '') + (dups.size && filter !== 'doppelt' ? ` ${dups.size} mögliche Doppeleinträge – unter „Filter“ prüfen.` : '') + (filter === 'doppelt' ? 'Gleicher Name mehrfach. Falschen Eintrag antippen › „Entfernen“. Achtung: Es kann auch zwei verschiedene Personen mit gleichem Namen geben.' : '');
     // Sortierung (Name ist immer die zweite Ebene)
     const byName = (a, b) => (a.last_name + ' ' + a.first_name).localeCompare(b.last_name + ' ' + b.first_name, 'de', { sensitivity: 'base' });
     const stIdx = x => { const i = L.STAGES.findIndex(s => s.id === x.stage); return i < 0 ? 99 : i; };
@@ -431,11 +495,11 @@
         <p class="muted small" style="margin:0">${t('kioskPrivacy')}</p>
         <p class="err" id="kerr" hidden></p>
         <button class="btn block" id="ksend" type="button">${t('kioskSubmit')}</button>
-        <button class="btn ghost small" id="kexit" type="button">Zurück zur Liste (nur Veranstalter, Passwort)</button>
+        <button class="btn ghost small hold" id="kexit" type="button"><span>Zurück zur Liste: 3 Sek. gedrückt halten</span></button>
       </div>`;
       if ($('klang')) $('klang').onchange = e => { I.set(e.target.value); form(); };
       box.querySelectorAll('input[name=ksc]').forEach(c => c.onchange = () => { $('kother').hidden = !box.querySelector(`input[name=ksc][value="${OTHER}"]:checked`); });
-      $('kexit').onclick = exitAsk;
+      holdExit($('kexit'));
       $('ksend').onclick = () => {
         const fn = $('kfn').value.trim(), ln = $('kln').value.trim();
         const sch = [...box.querySelectorAll('input[name=ksc]:checked')].map(c => c.value);
@@ -449,16 +513,17 @@
         act({ op: 'add', id: L.uuid(), event_id: data.event_id, present: true, paid: false, free, reduced: false, amount: free ? 0 : null, first_name: fn.slice(0, 60), last_name: ln.slice(0, 60), school, stage: st, photo_ok: true, note: 'selbst eingetragen' });
         box.innerHTML = `<div class="kwrap kdone"><div class="kcheck">✓</div><h2>${esc(t('kioskDone', { name: fn }))}</h2><p>${t('kioskReturn')}</p>
           <button class="btn gold block" id="knext" type="button">${t('kioskNext')}</button>
-          <button class="btn ghost small" id="kexit" type="button">Zurück zur Liste (nur Veranstalter, Passwort)</button></div>`;
-        $('knext').onclick = form; $('kexit').onclick = exitAsk;
+          <button class="btn ghost small hold" id="kexit" type="button"><span>Zurück zur Liste: 3 Sek. gedrückt halten</span></button></div>`;
+        $('knext').onclick = form; holdExit($('kexit'));
       };
     };
-    const exitAsk = () => {
-      const w = document.createElement('div'); w.className = 'kpw';
-      w.innerHTML = `<div class="kwrap"><h2>Veranstalter-Zugang</h2><div class="field"><label for="kpw">Einlass-Passwort</label><input type="password" id="kpw" autocomplete="off"></div><p class="err" id="kpwerr" hidden>Falsches Passwort.</p><div class="row"><button class="btn ghost" id="kpwc" type="button">Abbrechen</button><button class="btn" id="kpwok" type="button">Zur Liste</button></div></div>`;
-      box.appendChild(w); $('kpw').focus();
-      const ok = () => { if ($('kpw').value === key) { I.set('de'); close(); } else { $('kpwerr').hidden = false; } };
-      $('kpwok').onclick = ok; $('kpw').onkeydown = e => { if (e.key === 'Enter') ok(); }; $('kpwc').onclick = () => w.remove();
+    // Statt Passwort: Knopf 3 Sekunden gedrückt halten (versehentlich passiert das keinem Gast)
+    const holdExit = b => {
+      let t = null;
+      const stop = () => { clearTimeout(t); b.classList.remove('holding'); };
+      b.addEventListener('pointerdown', e => { e.preventDefault(); b.classList.add('holding'); t = setTimeout(() => { stop(); I.set('de'); close(); }, 3000); });
+      ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, stop));
+      b.addEventListener('contextmenu', e => e.preventDefault());
     };
     form(); window.scrollTo(0, 0);
   }
@@ -612,16 +677,20 @@
       <div class="card"><h2>Bitte nicht fotografieren oder filmen (${nofoto.length})</h2>
         ${nofoto.length ? '<ul style="margin:0;padding-left:20px">' + nofoto.map(x => `<li>${esc(x.first_name)} ${esc(x.last_name)} <span class="muted small">${x.present ? '· da' : '· noch nicht da'}</span></li>`).join('') + '</ul>' : '<p class="muted" style="margin:0">Alle sind mit Fotos und Videos einverstanden.</p>'}</div>
       <div class="card"><h2>Exportieren und drucken</h2>
-        <div class="tools2"><button class="btn ghost small" id="csv" type="button">Liste als Tabelle (CSV)</button><button class="btn ghost small" id="prl" type="button">Papierliste drucken</button><button class="btn ghost small" id="nsave" type="button">Notfall-Sicherung (Stand dieses Geräts)</button></div>
-        <p class="muted small" style="margin:0">Tipp: Papierliste am Vorabend drucken und als Rückfallebene mitnehmen.</p></div>
-      <div class="printing print-only" id="plist"></div>`;
+        <div class="tools2"><button class="btn ghost small" id="prl" type="button">🖨 Papierliste drucken</button><button class="btn ghost small" id="csv" type="button">Teilnehmerliste speichern / teilen (Tabelle)</button><button class="btn ghost small" id="nsave" type="button">Notfallkopie sichern (Stand dieses Geräts)</button></div>
+        <p class="muted small" style="margin:0"><b>Drucken:</b> öffnet die Druckansicht (A4) mit Namen, Schule, Stufe und Kästchen zum Abhaken. Am Vorabend drucken und als Rückfallebene mitnehmen.<br><b>Speichern / teilen:</b> erzeugt eine Tabellendatei (öffnet sich in Excel/Numbers). Auf iPad/iPhone erscheint das Teilen-Menü: „In Dateien sichern“ wählen und einen Ordner aussuchen. Die Liste enthält persönliche Daten, bitte nur an Robert, Viktor oder das Einlass-Team schicken, nicht in Gruppen.<br><b>Notfallkopie:</b> nur nötig, wenn das Gerät lange ohne Netz war und Änderungen noch nicht gesendet sind.</p></div>`;
     $('csv').onclick = exportCsv;
     $('nsave').onclick = () => exportCsv(true);
     $('prl').onclick = () => {
-      const e = event();
-      $('plist').innerHTML = `<h2 style="color:#000">${esc(e ? e.title : '')} · ${esc(e ? L.fmtDate(e.event_date) : '')}</h2><table class="plist"><thead><tr><th>Name</th><th>Schule</th><th>Stufe</th><th>Foto</th><th>Da</th><th>Bezahlt</th></tr></thead><tbody>
-        ${p.map(x => `<tr><td>${esc(x.last_name)}, ${esc(x.first_name)}</td><td>${esc(x.school)}</td><td>${esc(x.stage)}</td><td>${x.photo_ok ? 'ja' : 'NEIN'}</td><td>${x.present ? '✓' : '<span class="box"></span>'}</td><td>${x.free ? 'frei' : x.paid ? '✓' : '<span class="box"></span>'}</td></tr>`).join('')}
-        ${Array.from({ length: 15 }, () => '<tr><td>&nbsp;</td><td></td><td></td><td></td><td><span class="box"></span></td><td><span class="box"></span></td></tr>').join('')}</tbody></table>`;
+      const e = event(), pa = $('printArea');
+      const rows = p.slice().sort((a, b) => (a.last_name + ' ' + a.first_name).localeCompare(b.last_name + ' ' + b.first_name, 'de', { sensitivity: 'base' }));
+      pa.innerHTML = `<h2 style="color:#000;margin:0 0 6px">${esc(e ? e.title : '')} · ${esc(e ? L.fmtDate(e.event_date) : '')}</h2><p style="color:#000;margin:0 0 8px;font-size:11px">Stand ${new Date().toLocaleString('de-DE')} · ${rows.length} Personen · Nur für das Einlass-Team, nach dem Lehrgang vernichten.</p><table class="plist"><thead><tr><th>Name</th><th>Schule</th><th>Stufe</th><th>Vorab</th><th>Foto</th><th>Da</th><th>Bezahlt</th></tr></thead><tbody>
+        ${rows.map(x => `<tr><td>${esc(x.last_name)}, ${esc(x.first_name)}</td><td>${esc(x.school)}</td><td>${esc(x.stage)}</td><td>${x.source === 'vorab' ? '✓' : ''}</td><td>${x.photo_ok ? 'ja' : 'NEIN'}</td><td>${x.present ? '✓' : '<span class="box"></span>'}</td><td>${x.free ? 'frei' : x.paid ? (x.reduced ? 'erm.' : '✓') : '<span class="box"></span>'}</td></tr>`).join('')}
+        ${Array.from({ length: 15 }, () => '<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td><span class="box"></span></td><td><span class="box"></span></td></tr>').join('')}</tbody></table>`;
+      // Eigener Druckbereich außerhalb der Seite: der Abgleich alle 10 Sek. kann ihn nicht mehr leeren
+      document.body.classList.add('printlist');
+      const done = () => { document.body.classList.remove('printlist'); window.removeEventListener('afterprint', done); };
+      window.addEventListener('afterprint', done);
       window.print();
     };
   }
@@ -630,9 +699,23 @@
     const rows = [['Nachname', 'Vorname', 'Schule', 'Stufe', 'Fotos ok', 'Da', 'Da seit', 'Bezahlt', 'Angemeldet', 'Code']];
     people().forEach(x => rows.push([x.last_name, x.first_name, x.school, x.stage, x.photo_ok ? 'ja' : 'nein', x.present ? 'ja' : 'nein', x.present_at ? new Date(x.present_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '', payText(x), x.source === 'vorab' ? 'vorab' : 'vor Ort', x.ticket]));
     const csv = '﻿' + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\r\n');
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const ts = new Date().toLocaleString('de-DE').replace(/[^0-9]+/g, '-').replace(/-$/, '');
-    a.download = (emergency ? 'Notfall-Sicherung_' + ts + (queue.length ? '_' + queue.length + '-ungesendet' : '') : 'Teilnehmer_' + ((e && e.event_date) || 'Lehrgang')) + '.csv'; document.body.appendChild(a); a.click(); a.remove();
+    const name = (emergency ? 'Notfallkopie_' + ts + (queue.length ? '_' + queue.length + '-ungesendet' : '') : 'Teilnehmer_' + ((e && e.event_date) || 'Lehrgang')) + '.csv';
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    // iPad/iPhone: Teilen-Menü („In Dateien sichern“, Mail, AirDrop). Computer: normaler Download.
+    const touch = /iPad|iPhone|iPod|Android/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    try {
+      const file = new File([blob], name, { type: 'text/csv' });
+      if (touch && navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file], title: name }).then(() => toast('Datei weitergegeben: ' + esc(name)), err => { if (err && err.name !== 'AbortError') download(); });
+        return;
+      }
+    } catch (err) {}
+    download();
+    function download() {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      toast('Gespeichert als <b>' + esc(name) + '</b>' + (touch ? ' (Dateien-App › Downloads)' : ' (Ordner „Downloads“)'));
+    }
   }
 
   /* ---------- Plakat ---------- */
