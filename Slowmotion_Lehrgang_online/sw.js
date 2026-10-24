@@ -1,6 +1,6 @@
 /* Hält die Seiten auch ohne Netz verfügbar (wichtig für den Einlass in der Halle). */
-const CACHE = 'slowmotion-lehrgang-v20';
-const FILES = ['./', 'index.html', 'einlass.html', 'album.html', 'style.css', 'common.js', 'config.js', 'lang.js', 'lib/qrcode.js', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'manifest.webmanifest',
+const CACHE = 'slowmotion-lehrgang-v21';
+const FILES = ['./', 'index.html', 'einlass.html', 'album.html', 'style.css', 'common.js', 'config.js', 'lang.js', 'lib/qrcode.js', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'manifest.webmanifest', 'manifest-einlass.webmanifest',
   'logos/slowmotion.webp', 'logos/einsteiger.webp', 'logos/level1.webp', 'logos/level2.webp', 'logos/level3.webp', 'logos/praktiker.webp',
   'logos/kampfsystem.webp', 'logos/ausbilder1.webp', 'logos/ausbilder2.webp', 'logos/fuehrungskraefte.webp', 'logos/ehrenmitglied.webp'];
 
