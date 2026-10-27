@@ -4,6 +4,9 @@
    Rechts-nach-links-Sprachen (Arabisch) stehen in RTL; die Seite spiegelt sich dann automatisch. */
 (function () {
   const RTL = ['ar'];
+  // QR-Code nach der Voranmeldung anzeigen? (27.10.2026: für den Lehrgang am 14.11. AUS –
+  // Einlass läuft über die Namensliste. Für spätere Seminare wieder auf true stellen.)
+  const SHOW_QR = false;
   // Reihenfolge der Auswahl; "ready: false" = noch nicht übersetzt, erscheint nicht in der Auswahl.
   const LANGS = [
     { id: 'de', name: 'Deutsch', locale: 'de-DE', ready: true },
@@ -18,6 +21,10 @@
   ];
   const TEXT = {
     de: {
+      formIntroNoQr: 'Voranmeldung freiwillig – Teilnahme auch ohne Anmeldung möglich. Bezahlt wird bar vor Ort.',
+      screenshotNoQr: '<b>Fertig – du musst nichts weiter tun.</b> Am Einlass nennst du einfach deinen Namen. Bezahlt wird bar vor Ort.',
+      addPersonHintNoQr: 'Zum Beispiel ein Familienmitglied oder eine Begleitperson – jede Person wird einzeln angemeldet.',
+      backToTicketsNoQr: 'Zurück zu meiner Anmeldung',
       pageTitle: 'Slowmotion Lehrgang – Voranmeldung',
       langLabel: 'Sprache',
       kicker: 'Selbstverteidigung',
@@ -87,6 +94,10 @@
       tapPlace: 'Antippen für die Route', tapDate: 'Antippen für den Kalender'
     },
     en: {
+      formIntroNoQr: 'Pre-registration is optional – you can also take part without registering. Payment is in cash on site.',
+      screenshotNoQr: '<b>Done – nothing else to do.</b> Just tell us your name at the entrance. Payment is in cash on site.',
+      addPersonHintNoQr: 'For example a family member or companion – each person is registered separately.',
+      backToTicketsNoQr: 'Back to my registration',
       pageTitle: 'Slowmotion open seminar – pre-registration',
       langLabel: 'Language',
       kicker: 'Self-defence',
@@ -168,7 +179,8 @@
   }
   let cur = pick();
   function t(key, vars) {
-    let s = (TEXT[cur] && TEXT[cur][key]) ?? TEXT.de[key] ?? key;
+    const k2 = SHOW_QR ? null : key + 'NoQr';
+    let s = (k2 && ((TEXT[cur] && TEXT[cur][k2]) ?? TEXT.de[k2])) ?? (TEXT[cur] && TEXT[cur][key]) ?? TEXT.de[key] ?? key;
     if (vars) Object.keys(vars).forEach(k => { s = s.replace('{' + k + '}', vars[k]); });
     return s;
   }
@@ -188,5 +200,5 @@
     return `<label class="lang"><span class="sr">${t('langLabel')}</span><select id="langSel" aria-label="${t('langLabel')}">` +
       ready.map(l => `<option value="${l.id}" ${l.id === cur ? 'selected' : ''}>${l.name}</option>`).join('') + '</select></label>';
   }
-  window.LGI = { t, apply, set, locale, picker, get lang() { return cur; }, LANGS, RTL };
+  window.LGI = { t, showQr: SHOW_QR, apply, set, locale, picker, get lang() { return cur; }, LANGS, RTL };
 })();

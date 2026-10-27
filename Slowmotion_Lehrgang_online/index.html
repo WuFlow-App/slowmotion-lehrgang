@@ -271,13 +271,13 @@
     const one = tk => {
       const url = new URL('einlass.html', location.href); url.hash = tk.ticket;
       return `<div class="ticket" dir="ltr">
-        <div class="qr">${window.makeQrSvg(url.toString(), { level: 'M', border: 2 })}</div>
-        <div class="code">${esc(tk.ticket)}</div>
+        ${I.showQr ? `<div class="qr">${window.makeQrSvg(url.toString(), { level: 'M', border: 2 })}</div>
+        <div class="code">${esc(tk.ticket)}</div>` : ''}
         <div class="who">${esc(tk.first_name)} ${esc(tk.last_name)}</div>
         <div class="meta">${esc(schoolLabel(tk.school))} · ${L.stageBadge(tk.stage)}</div>
       </div>
       <p class="muted small tk-actions">
-        <button class="btn small gold" type="button" data-share="${esc(tk.client)}">${t('share')}</button>
+        ${I.showQr ? `<button class="btn small gold" type="button" data-share="${esc(tk.client)}">${t('share')}</button>` : ''}
         <button class="btn small ghost" type="button" data-edit="${esc(tk.client)}">${t('edit')}</button>
         <button class="btn small ghost danger" type="button" data-cancel="${esc(tk.client)}">${t('cancel')}</button></p>`;
     };
